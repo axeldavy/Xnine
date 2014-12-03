@@ -31,11 +31,22 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "d3d9.h"
+#include <d3d9.h>
 
 #include "dri3.h"
 #include <pthread.h>
 
+
+#ifdef _DEBUG
+#define TRACE(...)  fprintf(stderr, __VA_ARGS__)
+#define ERR(...)    fprintf(stderr, __VA_ARGS__)
+#else
+#define TRACE(...)
+#define ERR(...)    fprintf(stderr, __VA_ARGS__)
+#endif
+
+
+// --------------------------------- dlls/winex11.drv/dri3.c --------------------------------------------
 
 BOOL
 DRI3CheckExtension(Display *dpy, int major, int minor)
@@ -50,6 +61,7 @@ DRI3CheckExtension(Display *dpy, int major, int minor)
 
     extension = xcb_get_extension_data(xcb_connection, &xcb_dri3_id);
     if (!(extension && extension->present)) {
+        TRACE("DRI3 extension is not present\n");
         return FALSE;
     }
 
@@ -58,8 +70,11 @@ DRI3CheckExtension(Display *dpy, int major, int minor)
     dri3_reply = xcb_dri3_query_version_reply(xcb_connection, dri3_cookie, &error);
     if (!dri3_reply) {
         free(error);
+        TRACE("Issue getting requested version of DRI3: %d,%d\n", major, minor);
         return FALSE;
     }
+
+    TRACE("DRI3 version %d,%d found. %d %d requested\n", major, minor, (int)dri3_reply->major_version, (int)dri3_reply->minor_version);
     free(dri3_reply);
 
     return TRUE;
@@ -78,6 +93,7 @@ PRESENTCheckExtension(Display *dpy, int major, int minor)
 
     extension = xcb_get_extension_data(xcb_connection, &xcb_present_id);
     if (!(extension && extension->present)) {
+        TRACE("PRESENT extension is not present\n");
         return FALSE;
     }
 
@@ -86,9 +102,11 @@ PRESENTCheckExtension(Display *dpy, int major, int minor)
     present_reply = xcb_present_query_version_reply(xcb_connection, present_cookie, &error);
     if (!present_reply) {
         free(error);
+        TRACE("Issue getting requested version of PRESENT: %d,%d\n", major, minor);
         return FALSE;
     }
 
+    TRACE("PRESENT version %d,%d found. %d %d requested\n", major, minor, (int)present_reply->major_version, (int)present_reply->minor_version);
     free(present_reply);
 
     return TRUE;
@@ -138,7 +156,7 @@ DRI3PixmapFromDmaBuf(Display *dpy, int screen, int fd, int width, int height, in
                                                 depth, bpp, fd);
     error = xcb_request_check(xcb_connection, cookie); /* performs a flush */
     if (error) {
-        fprintf(stderr, "Error using DRI3 to convert a DmaBufFd to pixmap\n");
+        ERR("Error using DRI3 to convert a DmaBufFd to pixmap\n");
         return FALSE;
     }
     return TRUE;
@@ -220,7 +238,7 @@ static void PRESENThandle_events(PRESENTpriv *present_priv, xcb_present_generic_
             }
             present_pixmap_priv = PRESENTFindPixmapPriv(present_priv, ce->serial);
             if (!present_pixmap_priv || ce->kind != XCB_PRESENT_COMPLETE_KIND_PIXMAP) {
-                fprintf(stderr, "FATAL ERROR: PRESENT handling failed\n");
+                ERR("FATAL ERROR: PRESENT handling failed\n");
                 free(ce);
                 return;
             }
@@ -241,7 +259,7 @@ static void PRESENThandle_events(PRESENTpriv *present_priv, xcb_present_generic_
             xcb_present_idle_notify_event_t *ie = (void *) ge;
             present_pixmap_priv = PRESENTFindPixmapPriv(present_priv, ie->serial);
             if (!present_pixmap_priv || present_pixmap_priv->pixmap != ie->pixmap) {
-                fprintf(stderr, "FATAL ERROR: PRESENT handling failed\n");
+                ERR("FATAL ERROR: PRESENT handling failed\n");
                 free(ie);
                 return;
             }
@@ -281,7 +299,7 @@ static BOOL PRESENTwait_events(PRESENTpriv *present_priv, BOOL allow_other_threa
         present_priv->xcb_wait = FALSE;
     }
     if (!ev) {
-        fprintf(stderr, "FATAL error: xcb had an error\n");
+        ERR("FATAL error: xcb had an error\n");
         return FALSE;
     }
 
@@ -363,7 +381,7 @@ static void PRESENTForceReleases(PRESENTpriv *present_priv)
     while (current) {
         if (!current->released) {
             if (!current->last_present_was_flip && !present_priv->xcb_wait) {
-                fprintf(stderr, "ERROR: a pixmap seems not released by PRESENT for no reason. Code bug.\n");
+                ERR("ERROR: a pixmap seems not released by PRESENT for no reason. Code bug.\n");
             } else {
                 /* Present the same pixmap with a non-valid part to force the copy mode and the releases */
                 xcb_xfixes_region_t valid, update;
@@ -423,7 +441,7 @@ static BOOL PRESENTPrivChangeWindow(PRESENTpriv *present_priv, XID window)
                                                                    eid, NULL);
         error = xcb_request_check(present_priv->xcb_connection, cookie); /* performs a flush */
         if (error || !present_priv->special_event) {
-            fprintf(stderr, "FAILED to use the X PRESENT extension. Was the destination a window ?\n");
+            ERR("FAILED to use the X PRESENT extension. Was the destination a window ?\n");
             if (present_priv->special_event)
                 xcb_unregister_for_special_event(present_priv->xcb_connection, present_priv->special_event);
             present_priv->special_event = NULL;
@@ -579,14 +597,14 @@ PRESENTPixmap(Display *dpy, XID window,
         PRESENTPrivChangeWindow(present_priv, window);
 
     if (!window) {
-        fprintf(stderr, "ERROR: Try to Present a pixmap on a NULL window\n");
+        ERR("ERROR: Try to Present a pixmap on a NULL window\n");
         pthread_mutex_unlock(&present_priv->mutex_present);
         return FALSE;
     }
 
     PRESENTflush_events(present_priv, FALSE);
     if (!present_pixmap_priv->released || present_pixmap_priv->present_complete_pending) {
-        fprintf(stderr, "FATAL ERROR: Trying to Present a pixmap not released\n");
+        ERR("FATAL ERROR: Trying to Present a pixmap not released\n");
         pthread_mutex_unlock(&present_priv->mutex_present);
         return FALSE;
     }
@@ -695,25 +713,25 @@ PRESENTPixmap(Display *dpy, XID window,
         cookie_geom = xcb_get_geometry(present_priv->xcb_connection_bis, window);
         reply = xcb_get_geometry_reply(present_priv->xcb_connection_bis, cookie_geom, NULL);
 
-        fprintf(stderr, "Error using PRESENT. Here some debug info\n");
+        ERR("Error using PRESENT. Here some debug info\n");
         if (!reply) {
-            fprintf(stderr, "Error querying window info. Perhaps it doesn't exist anymore\n");
+            ERR("Error querying window info. Perhaps it doesn't exist anymore\n");
             pthread_mutex_unlock(&present_priv->mutex_present);
             return FALSE;
         }
-        fprintf(stderr, "Pixmap: width=%d, height=%d, depth=%d\n",
+        ERR("Pixmap: width=%d, height=%d, depth=%d\n",
             present_pixmap_priv->width, present_pixmap_priv->height,
             present_pixmap_priv->depth);
-        fprintf(stderr, "Window: width=%d, height=%d, depth=%d, x=%d, y=%d\n",
+        ERR("Window: width=%d, height=%d, depth=%d, x=%d, y=%d\n",
             (int) reply->width, (int) reply->height,
             (int) reply->depth, (int) reply->x, (int) reply->y);
-        fprintf(stderr, "Present parameter: PresentationInterval=%d, BackBufferCount=%d, Pending presentations=%d\n",
+        ERR("Present parameter: PresentationInterval=%d, BackBufferCount=%d, Pending presentations=%d\n",
             pPresentationParameters->PresentationInterval,
             pPresentationParameters->BackBufferCount,
             present_priv->pixmap_present_pending
            );
         if (present_pixmap_priv->depth != reply->depth)
-            fprintf(stderr, "Depths are different. PRESENT needs the pixmap and the window have same depth\n");
+            ERR("Depths are different. PRESENT needs the pixmap and the window have same depth\n");
         free(reply);
         pthread_mutex_unlock(&present_priv->mutex_present);
         return FALSE;
@@ -744,7 +762,8 @@ PRESENTWaitPixmapReleased(PRESENTPixmapPriv *present_pixmap_priv)
             /* here the other thread got an event but hasn't treated it yet */
             pthread_mutex_unlock(&present_priv->mutex_xcb_wait);
             pthread_mutex_unlock(&present_priv->mutex_present);
-            sleep(1); /* Let it treat the event */
+            struct timespec duration = { 0, 10 * 1000*1000 };
+            nanosleep(&duration,NULL); /* Let it treat the event */
             pthread_mutex_lock(&present_priv->mutex_present);
         } else if (!PRESENTwait_events(present_priv, TRUE)) {
             pthread_mutex_unlock(&present_priv->mutex_present);

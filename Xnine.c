@@ -34,9 +34,9 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
-#include "d3d9.h"
-#include "d3dadapter9.h"
-#include "drm.h"
+#include <d3d9.h>
+#include <d3dadapter/d3dadapter9.h>
+#include <d3dadapter/drm.h>
 #include "Xnine.h"
 #include "dri3.h"
 
