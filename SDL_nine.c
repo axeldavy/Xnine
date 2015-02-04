@@ -1,13 +1,19 @@
+// ----------------------------------------
+// SDL_nine
+
+#include "SDL_nine.h"
+
+#include <dlfcn.h>
+#include <malloc.h>
+#include <memory.h>
+#include <fcntl.h>
+#include <time.h>
+
 #include <X11/Xlib.h>
 #include <xcb/xcb.h>
 #include <xcb/dri3.h>
 #include <xcb/present.h>
 #include <X11/Xlib-xcb.h>
-
-#include <malloc.h>
-#include <memory.h>
-#include <fcntl.h>
-#include <time.h>
 
 #include <d3dadapter/drm.h>
 
@@ -22,7 +28,7 @@
 #define WARN(...)   fprintf(stderr, __VA_ARGS__)
 #define ERR(...)    fprintf(stderr, __VA_ARGS__)
 
-static BOOL IsEqualGUID(const GUID* a, const GUID* b)
+static inline BOOL IsEqualGUID(const GUID* a, const GUID* b)
 {
     return memcmp(a,b,sizeof(GUID)) == 0;
 }
@@ -33,13 +39,11 @@ static const char* debugstr_guid(const GUID* id)
 
 static inline LONG WINAPI InterlockedIncrement( LONG volatile *dest )
 {
-    // TODO
-    return ++(*dest);
+    return __sync_add_and_fetch(dest, 1);;
 }
 static inline LONG WINAPI InterlockedDecrement( LONG volatile *dest )
 {
-    // TODO
-    return --(*dest);
+    return __sync_sub_and_fetch(dest, 1);;
 }
 
 
@@ -90,12 +94,13 @@ static const Uint32 ConvertToSDL(D3DFORMAT format)
 #include <errno.h>
 #include <fcntl.h>
 
-#ifndef D3DPRESENT_DONOTWAIT
+/*#ifndef D3DPRESENT_DONOTWAIT
 #define D3DPRESENT_DONOTWAIT      0x00000001
-#endif
+#endif*/
 
-#define WINE_D3DADAPTER_DRIVER_PRESENT_VERSION_MAJOR 1
-#define WINE_D3DADAPTER_DRIVER_PRESENT_VERSION_MINOR 0
+#if D3DADAPTER9_WITHDRI2
+static int is_dri2_fallback = 0;
+#endif
 
 const GUID IID_IDirect3D9Ex = { 0x02177241, 0x69FC, 0x400C, {0x8F, 0xF1, 0x93, 0xA4, 0x4D, 0xF6, 0x86, 0x1D}};
 const GUID IID_IDirect3D9 = { 0x81BDCBCA, 0x64D4, 0x426D, {0xAE, 0x8D, 0xAD, 0x1, 0x47, 0xF4, 0x27, 0x5C}};
@@ -113,6 +118,9 @@ struct DRI3Present
 
     D3DPRESENT_PARAMETERS params;
     PRESENTpriv *present_priv;
+#if D3DADAPTER9_WITHDRI2
+    struct DRI2priv *dri2_priv;
+#endif
 
     SDL_Window* sdl_win;
     Display*    x11_display;
@@ -121,7 +129,6 @@ struct DRI3Present
 
 struct D3DWindowBuffer
 {
-    Pixmap pixmap;
     PRESENTPixmapPriv *present_pixmap_priv;
 };
 
@@ -141,7 +148,12 @@ DRI3Present_Release( struct DRI3Present *This )
     TRACE("%p decreasing refcount to %u.\n", This, refs);
     if (refs == 0) {
         /* dtor */
+        SDL_SetWindowFullscreen(This->sdl_win, FALSE);
         PRESENTDestroy(This->x11_display, This->present_priv);
+#if D3DADAPTER9_WITHDRI2
+        if (is_dri2_fallback)
+            DRI2FallbackDestroy(This->dri2_priv);
+#endif
         free(This);
     }
     return refs;
@@ -227,8 +239,17 @@ DRI3Present_SetPresentParameters( struct DRI3Present *This,
             mode = &target;
         }
 
-        SDL_SetWindowDisplayMode(This->sdl_win, mode);
-        SDL_SetWindowFullscreen(This->sdl_win, SDL_WINDOW_FULLSCREEN);
+        int err = SDL_SetWindowDisplayMode(This->sdl_win, mode);
+        if (err < 0) {
+            WARN("SDL_SetWindowDisplayMode returned an error: %s\n", SDL_GetError());
+            return D3DERR_INVALIDCALL;
+        }
+
+        err = SDL_SetWindowFullscreen(This->sdl_win, SDL_WINDOW_FULLSCREEN);
+        if (err < 0) {
+            WARN("SDL_SetWindowFullscreen returned an error: %s\n", SDL_GetError());
+            return D3DERR_INVALIDCALL;
+        }
 
         DRI3Present_ChangePresentParameters(This, pPresentationParameters, FALSE);
     }
@@ -247,13 +268,22 @@ DRI3Present_D3DWindowBufferFromDmaBuf( struct DRI3Present *This,
 {
     Pixmap pixmap;
 
+#if D3DADAPTER9_WITHDRI2
+    if (is_dri2_fallback) {
+        *out = calloc(1, sizeof(struct D3DWindowBuffer));
+        DRI2FallbackPRESENTPixmap(This->present_priv, This->dri2_priv,
+                                  dmaBufFd, width, height, stride, depth,
+                                  bpp,
+                                  &((*out)->present_pixmap_priv));
+        return D3D_OK;
+    }
+#endif
     if (!DRI3PixmapFromDmaBuf(This->x11_display, DefaultScreen(This->x11_display),
                               dmaBufFd, width, height, stride, depth,
                               bpp, &pixmap ))
         return D3DERR_DRIVERINTERNALERROR;
 
     *out = calloc(1, sizeof(struct D3DWindowBuffer));
-    (*out)->pixmap = pixmap;
     PRESENTPixmapInit(This->present_priv, pixmap, &((*out)->present_pixmap_priv));
     return D3D_OK;
 }
@@ -274,6 +304,7 @@ static HRESULT WINAPI
 DRI3Present_WaitBufferReleased( struct DRI3Present *This,
                                 struct D3DWindowBuffer *buffer)
 {
+    (void) This;
     PRESENTWaitPixmapReleased(buffer->present_pixmap_priv);
     return D3D_OK;
 }
@@ -282,6 +313,10 @@ static HRESULT WINAPI
 DRI3Present_FrontBufferCopy( struct DRI3Present *This,
                              struct D3DWindowBuffer *buffer )
 {
+#if D3DADAPTER9_WITHDRI2
+    if (is_dri2_fallback)
+        return D3DERR_DRIVERINTERNALERROR;
+#endif
     /* TODO: use dc_rect */
     if (PRESENTHelperCopyFront(This->x11_display, buffer->present_pixmap_priv))
         return D3D_OK;
@@ -409,11 +444,12 @@ DRI3Present_GetWindowInfo( struct DRI3Present *This,
                            int *width, int *height, int *depth )
 {
     int w,h;
-    SDL_GetWindowSize(This->sdl_win, &w, &h);
+    SDL_GetWindowSize(This->sdl_win, &w, &h);    
+    Uint32 format = SDL_GetWindowPixelFormat(This->sdl_win);
 
     *width = w;
     *height = h;
-    *depth = 24; //TODO
+    *depth = format != SDL_PIXELFORMAT_UNKNOWN ? SDL_BITSPERPIXEL(format) : 24;
     return D3D_OK;
 }
 
@@ -493,6 +529,10 @@ DRI3Present_new( SDL_Window* sdl_win,
     DRI3Present_ChangePresentParameters(This, params, TRUE);
 
     PRESENTInit(info.info.x11.display, &(This->present_priv));
+#if D3DADAPTER9_WITHDRI2
+    if (is_dri2_fallback)
+        DRI2FallbackInit(info.info.x11.display, &(This->dri2_priv));
+#endif
 
     *out = This;
 
@@ -592,8 +632,8 @@ DRI3PresentGroup_GetVersion( struct DRI3PresentGroup *This,
                              int *major,
                              int *minor)
 {
-    *major = WINE_D3DADAPTER_DRIVER_PRESENT_VERSION_MAJOR;
-    *minor = WINE_D3DADAPTER_DRIVER_PRESENT_VERSION_MINOR;
+    *major = 1;
+    *minor = 0;
 }
 
 static ID3DPresentGroupVtbl DRI3PresentGroup_vtable = {
@@ -661,7 +701,7 @@ struct d3dadapter9
     /* IUnknown reference count */
     LONG refs;
 
-    /* simple test, one mode */
+    /* simple test, one adapter */
     ID3DAdapter9 *adapter;
 
     /* true if it implements IDirect3D9Ex */
@@ -1115,6 +1155,76 @@ HRESULT
 d3dadapter9_new( BOOL ex, Display *dpy,
                  IDirect3D9Ex **ppOut )
 {
+    static void * WINAPI (*pD3DAdapter9GetProc)(const char *) = NULL;
+    static BOOL StaticInitDone = FALSE;
+
+    // load dynamic library and retrieve "D3DAdapter9GetProc" symbol.
+    if (!StaticInitDone) {
+        StaticInitDone = TRUE;
+
+        if (!PRESENTCheckExtension(dpy, 1, 0)) {
+            ERR("Unable to query PRESENT.\n");
+            return D3DERR_NOTAVAILABLE;
+        }
+
+        if (!DRI3CheckExtension(dpy, 1, 0)) {
+#if !D3DADAPTER9_WITHDRI2
+            ERR("Unable to query DRI3.\n");
+            return D3DERR_NOTAVAILABLE;
+#else
+            ERR("Unable to query DRI3. Trying DRI2 fallback (slower performance).\n");
+            is_dri2_fallback = 1;
+            if (!DRI2FallbackCheckSupport(dpy)) {
+                ERR("DRI2 fallback unsupported\n");
+                return D3DERR_NOTAVAILABLE;
+            }
+#endif
+        }
+
+
+        void * handle = dlopen(D3DADAPTERPATH, RTLD_LOCAL | RTLD_NOW);
+        if (!handle) {
+            ERR("Failed to load d3d9 lib: %s\n", dlerror());
+            return D3DERR_NOTAVAILABLE;
+        }
+
+        pD3DAdapter9GetProc = dlsym(handle, "D3DAdapter9GetProc");
+        if (!pD3DAdapter9GetProc) {
+            ERR("Failed to load d3d9 lib symbols\n");
+            return D3DERR_NOTAVAILABLE;
+        }
+    }
+
+    int fd;
+#if D3DADAPTER9_WITHDRI2
+    if (!is_dri2_fallback && !DRI3Open(dpy, DefaultScreen(dpy), &fd)) {
+#else
+    if (!DRI3Open(dpy, DefaultScreen(dpy), &fd)) {
+#endif
+        ERR("DRI3Open failed (fd=%d)\n", fd);
+        return D3DERR_NOTAVAILABLE;
+    }
+#if D3DADAPTER9_WITHDRI2
+    if (is_dri2_fallback && !DRI2FallbackOpen(dpy, DefaultScreen(dpy), &fd)) {
+        ERR("DRI2Open failed (fd=%d)\n", fd);
+        return D3DERR_NOTAVAILABLE;
+    }
+#endif
+
+    const struct D3DAdapter9DRM *d3d9_drm = pD3DAdapter9GetProc(D3DADAPTER9DRM_NAME);
+    if (!d3d9_drm || d3d9_drm->major_version != D3DADAPTER9DRM_MAJOR)
+    {
+        ERR("Your display driver doesn't support native D3D9 adapters.\n");
+        return D3DERR_NOTAVAILABLE;
+    }
+
+    ID3DAdapter9* adapter = NULL;
+    HRESULT hr = d3d9_drm->create_adapter(fd, &adapter);
+    if (FAILED(hr)) {
+        ERR("Unable to create ID3DAdapter9 (fd=%d)\n", fd);
+        return hr;
+    }
+
     struct d3dadapter9 *This = calloc(1, sizeof(struct d3dadapter9));
     if (!This) {
         ERR("Out of memory.\n");
@@ -1124,30 +1234,6 @@ d3dadapter9_new( BOOL ex, Display *dpy,
     This->vtable = &d3dadapter9_vtable;
     This->refs = 1;
     This->ex = ex;
-
-    int fd;
-    if (!DRI3Open(dpy, DefaultScreen(dpy), &fd)) {
-        ERR("Your display driver doesn't support DRI3Open.\n");
-        d3dadapter9_Release(This);
-        return D3DERR_NOTAVAILABLE;
-    }
-
-    const struct D3DAdapter9DRM *d3d9_drm = D3DAdapter9GetProc(D3DADAPTER9DRM_NAME);
-    if (!d3d9_drm
-    || d3d9_drm->major_version != D3DADAPTER9DRM_MAJOR)
-    {
-        ERR("Your display driver doesn't support native D3D9 adapters.\n");
-        d3dadapter9_Release(This);
-        return D3DERR_NOTAVAILABLE;
-    }
-
-     ID3DAdapter9* adapter;
-     HRESULT hr = d3d9_drm->create_adapter(fd, &adapter);
-     if (FAILED(hr)) {
-        ERR("No available native adapters in system.\n");
-         return hr;
-     }
-
     This->adapter = adapter;
 
     *ppOut = (IDirect3D9Ex *)This;
@@ -1180,12 +1266,12 @@ static IDirect3D9Ex* SDL_Direct3DCreate9Ex_common(BOOL ex, SDL_Window *win )
 
 IDirect3D9Ex* SDL_Direct3DCreate9Ex(SDL_Window *win)
 {
-	return SDL_Direct3DCreate9Ex_common(TRUE, win);
+    return SDL_Direct3DCreate9Ex_common(TRUE, win);
 }
 
 
 IDirect3D9* SDL_Direct3DCreate9(SDL_Window *win)
 {
-	return (IDirect3D9*)SDL_Direct3DCreate9Ex_common(FALSE, win);
+    return (IDirect3D9*)SDL_Direct3DCreate9Ex_common(FALSE, win);
 }
 
