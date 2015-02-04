@@ -21,6 +21,8 @@
  * DEALINGS IN THE SOFTWARE.
  */ 
 
+#ifndef __XNINE_DRI3_H
+#define __XNINE_DRI3_H
 
 #include <X11/extensions/Xfixes.h>
 #include <X11/Xlib.h>
@@ -32,11 +34,29 @@
 BOOL
 DRI3CheckExtension(Display *dpy, int major, int minor);
 
+#if D3DADAPTER9_WITHDRI2
+struct DRI2priv;
+
+BOOL
+DRI2FallbackInit(Display *dpy, struct DRI2priv **priv);
+
+void
+DRI2FallbackDestroy(struct DRI2priv *priv);
+
+BOOL
+DRI2FallbackCheckSupport(Display *dpy);
+#endif
+
 BOOL
 PRESENTCheckExtension(Display *dpy, int major, int minor);
 
 BOOL
 DRI3Open(Display *dpy, int screen, int *device_fd);
+
+#if D3DADAPTER9_WITHDRI2
+BOOL
+DRI2FallbackOpen(Display *dpy, int screen, int *device_fd);
+#endif
 
 BOOL
 DRI3PixmapFromDmaBuf(Display *dpy, int screen, int fd, int width, int height, int stride, int depth, int bpp, Pixmap *pixmap);
@@ -61,8 +81,15 @@ PRESENTDestroy(Display *dpy, PRESENTpriv *present_priv);
 BOOL
 PRESENTPixmapInit(PRESENTpriv *present_priv, Pixmap pixmap, PRESENTPixmapPriv **present_pixmap_priv);
 
+#if D3DADAPTER9_WITHDRI2
 BOOL
-PRESENTTryFreePixmap(PRESENTPixmapPriv *present_pixmap_priv);
+DRI2FallbackPRESENTPixmap(PRESENTpriv *present_priv, struct DRI2priv *priv,
+                          int fd, int width, int height, int stride, int depth,
+                          int bpp, PRESENTPixmapPriv **present_pixmap_priv);
+#endif
+
+BOOL
+PRESENTTryFreePixmap(Display *dpy, PRESENTPixmapPriv *present_pixmap_priv);
 
 BOOL
 PRESENTHelperCopyFront(Display *dpy, PRESENTPixmapPriv *present_pixmap_priv);
@@ -75,3 +102,4 @@ PRESENTPixmap(Display *dpy, XID window,
 BOOL
 PRESENTWaitPixmapReleased(PRESENTPixmapPriv *present_pixmap_priv);
 
+#endif /* __XNINE_DRI3_H */

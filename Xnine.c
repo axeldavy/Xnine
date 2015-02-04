@@ -294,7 +294,7 @@ Xnine_DestroyD3DWindowBuffer(struct D3DPresent_Xnine *This,
                              struct D3DWindowBuffer *buffer)
 {
     (void) This;
-    PRESENTTryFreePixmap(buffer->present_pixmap_priv);
+    PRESENTTryFreePixmap(This->priv->dpy, buffer->present_pixmap_priv);
     free(buffer);
     return D3D_OK;
 }

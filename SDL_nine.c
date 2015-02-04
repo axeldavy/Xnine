@@ -265,7 +265,7 @@ DRI3Present_DestroyD3DWindowBuffer( struct DRI3Present *This,
     /* the pixmap is managed by the PRESENT backend.
      * But if it can delete it right away, we may have
      * better performance */
-    PRESENTTryFreePixmap(buffer->present_pixmap_priv);
+    PRESENTTryFreePixmap(This->x11_display, buffer->present_pixmap_priv);
     free(buffer);
     return D3D_OK;
 }
