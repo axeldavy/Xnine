@@ -25,17 +25,72 @@
 
 #include <stdlib.h>
 #include <fcntl.h>
+
 #include <X11/Xlib.h>
 #include <X11/extensions/Xfixes.h>
 #include <X11/Xlib-xcb.h>
 #include <stdio.h>
 #include <string.h>
-
-#include "d3d9.h"
-
-#include "dri3.h"
 #include <pthread.h>
 
+#if D3DADAPTER9_WITHDRI2
+
+// BOOL is defined differently in Xmd.h and d3dt.h
+#define BOOL hack_xmd_BOOL
+
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <X11/Xlibint.h>
+#include <X11/extensions/dri2tokens.h>
+#include <X11/extensions/dri2proto.h>
+#include <X11/extensions/extutil.h>
+#define GL_GLEXT_PROTOTYPES 1
+#define EGL_EGLEXT_PROTOTYPES 1
+#define GL_GLEXT_LEGACY 1
+#include <GL/gl.h>
+/* workaround gl header bug */
+#define glBlendColor glBlendColorLEV
+#define glBlendEquation glBlendEquationLEV
+#include <GL/glext.h>
+#include <EGL/egl.h>
+#include <EGL/eglext.h>
+#include <libdrm/drm_fourcc.h>
+#include <libdrm/drm.h>
+/*GLAPI void GLAPIENTRY glFlush( void );
+
+GLAPI void APIENTRY glGenFramebuffers (GLsizei n, GLuint *framebuffers);
+GLAPI void APIENTRY glBindFramebufferEXT (GLenum target, GLuint framebuffer);
+GLAPI void APIENTRY glBlitFramebuffer (GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter);
+GLAPI void APIENTRY glFramebufferTexture2DEXT (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+GLAPI void APIENTRY glBindFramebuffer (GLenum target, GLuint framebuffer);
+GLAPI void APIENTRY glFramebufferTexture2D (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level);
+GLAPI void APIENTRY glDeleteTexturesEXT (GLsizei n, const GLuint *textures);
+EGLAPI EGLBoolean EGLAPIENTRY eglDestroyImageKHR (EGLDisplay dpy, EGLImageKHR image);*/
+
+typedef void (APIENTRYP PFNGLEGLIMAGETARGETTEXTURE2DOESPROC) (GLenum target, GLeglImageOES image);
+typedef EGLImageKHR (EGLAPIENTRYP PFNEGLCREATEIMAGEKHRPROC) (EGLDisplay dpy, EGLContext ctx, EGLenum target, EGLClientBuffer buffer, const EGLint *attrib_list);
+typedef EGLDisplay (EGLAPIENTRYP PFNEGLGETPLATFORMDISPLAYEXTPROC) (EGLenum platform, void *native_display, const EGLint *attrib_list);
+
+#undef BOOL
+
+#endif
+
+
+#include <d3d9.h>
+
+#include "dri3.h"
+
+
+#ifdef _DEBUG
+#define TRACE(...)  fprintf(stderr, __VA_ARGS__)
+#define ERR(...)    fprintf(stderr, __VA_ARGS__)
+#else
+#define TRACE(...)
+#define ERR(...)    fprintf(stderr, __VA_ARGS__)
+#endif
+
+
+// --------------------------------- dlls/winex11.drv/dri3.c --------------------------------------------
 
 BOOL
 DRI3CheckExtension(Display *dpy, int major, int minor)
@@ -45,11 +100,13 @@ DRI3CheckExtension(Display *dpy, int major, int minor)
     xcb_dri3_query_version_reply_t *dri3_reply;
     xcb_generic_error_t *error;
     const xcb_query_extension_reply_t *extension;
+    int fd;
 
     xcb_prefetch_extension_data(xcb_connection, &xcb_dri3_id);
 
     extension = xcb_get_extension_data(xcb_connection, &xcb_dri3_id);
     if (!(extension && extension->present)) {
+        ERR("DRI3 extension is not present\n");
         return FALSE;
     }
 
@@ -58,12 +115,141 @@ DRI3CheckExtension(Display *dpy, int major, int minor)
     dri3_reply = xcb_dri3_query_version_reply(xcb_connection, dri3_cookie, &error);
     if (!dri3_reply) {
         free(error);
+        ERR("Issue getting requested version of DRI3: %d,%d\n", major, minor);
         return FALSE;
     }
+
+    if (!DRI3Open(dpy, DefaultScreen(dpy), &fd)) {
+        ERR("DRI3 advertised, but not working\n");
+        return FALSE;
+    }
+    close(fd);
+
+    TRACE("DRI3 version %d,%d found. %d %d requested\n", major, minor, (int)dri3_reply->major_version, (int)dri3_reply->minor_version);
     free(dri3_reply);
 
     return TRUE;
 }
+
+#if D3DADAPTER9_WITHDRI2
+
+struct DRI2priv {
+    Display *dpy;
+    EGLDisplay display;
+    EGLContext context;
+    PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES_func;
+    PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR_func;
+};
+
+/* TODO: We don't free memory properly. When exiting, eglTerminate doesn't work well(crash), and things are freed automatically. Rely on it */
+
+BOOL
+DRI2FallbackInit(Display *dpy, struct DRI2priv **priv)
+{
+    PFNGLEGLIMAGETARGETTEXTURE2DOESPROC glEGLImageTargetTexture2DOES_func;
+    PFNEGLCREATEIMAGEKHRPROC eglCreateImageKHR_func;
+    PFNEGLGETPLATFORMDISPLAYEXTPROC eglGetPlatformDisplayEXT_func;
+    EGLDisplay display;
+    EGLint major, minor;
+    EGLConfig config;
+    EGLContext context;
+    EGLint i;
+    EGLBoolean b;
+    EGLenum current_api;
+    const char *extensions;
+    EGLint config_attribs[] = {
+        EGL_RENDERABLE_TYPE, EGL_OPENGL_BIT,
+        EGL_NONE
+    };
+    EGLint context_compatibility_attribs[] = {
+        EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR, EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT_KHR,
+        EGL_NONE
+    };
+
+    current_api = eglQueryAPI();
+    eglGetPlatformDisplayEXT_func = (PFNEGLGETPLATFORMDISPLAYEXTPROC) eglGetProcAddress("eglGetPlatformDisplayEXT");
+    if (!eglGetPlatformDisplayEXT_func)
+        return FALSE;
+    display = eglGetPlatformDisplayEXT_func(EGL_PLATFORM_X11_EXT, dpy, NULL);
+    if (!display)
+        return FALSE;
+    if (eglInitialize(display, &major, &minor) != EGL_TRUE)
+        goto clean_egl_display;
+
+    extensions = eglQueryString(display, EGL_CLIENT_APIS);
+    if (!extensions || !strstr(extensions, "OpenGL"))
+        goto clean_egl_display;
+
+    extensions = eglQueryString(display, EGL_EXTENSIONS);
+    if (!extensions || !strstr(extensions, "EGL_EXT_image_dma_buf_import") ||
+        !strstr(extensions, "EGL_KHR_create_context") ||
+        !strstr(extensions, "EGL_KHR_surfaceless_context"))
+        goto clean_egl_display;
+
+    if (!eglChooseConfig(display, config_attribs, &config, 1, &i))
+        goto clean_egl_display;
+
+    b = eglBindAPI(EGL_OPENGL_API);
+    if (b == EGL_FALSE)
+        goto clean_egl_display;
+    context = eglCreateContext(display, config, EGL_NO_CONTEXT, context_compatibility_attribs);
+    if (context == EGL_NO_CONTEXT)
+        goto clean_egl_display;
+
+    glEGLImageTargetTexture2DOES_func = (PFNGLEGLIMAGETARGETTEXTURE2DOESPROC) eglGetProcAddress("glEGLImageTargetTexture2DOES");
+    eglCreateImageKHR_func = (PFNEGLCREATEIMAGEKHRPROC) eglGetProcAddress("eglCreateImageKHR");
+    if (!eglCreateImageKHR_func || !glEGLImageTargetTexture2DOES_func)
+        goto clean_egl_display;
+
+    eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+    *priv = calloc(1, sizeof(struct DRI2priv));
+    if (!*priv)
+        goto clean_egl;
+    (*priv)->dpy = dpy;
+    (*priv)->display = display;
+    (*priv)->context = context;
+    (*priv)->glEGLImageTargetTexture2DOES_func = glEGLImageTargetTexture2DOES_func;
+    (*priv)->eglCreateImageKHR_func = eglCreateImageKHR_func;
+    eglBindAPI(current_api);
+    return TRUE;
+
+clean_egl:
+clean_egl_display:
+    eglTerminate(display);
+    eglBindAPI(current_api);
+    return FALSE;
+}
+
+/* hypothesis: at this step all textures, etc are destroyed */
+void
+DRI2FallbackDestroy(struct DRI2priv *priv)
+{
+    EGLenum current_api;
+    current_api = eglQueryAPI();
+    eglBindAPI(EGL_OPENGL_API);
+    eglMakeCurrent(priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglDestroyContext(priv->display, priv->context);
+    eglTerminate(priv->display);
+    eglBindAPI(current_api);
+    free(priv);
+}
+
+BOOL
+DRI2FallbackCheckSupport(Display *dpy)
+{
+    struct DRI2priv *priv;
+    int fd;
+    if (!DRI2FallbackInit(dpy, &priv))
+        return FALSE;
+    DRI2FallbackDestroy(priv);
+    if (!DRI2FallbackOpen(dpy, DefaultScreen(dpy), &fd))
+        return FALSE;
+    close(fd);
+    return TRUE;
+}
+
+#endif
 
 BOOL
 PRESENTCheckExtension(Display *dpy, int major, int minor)
@@ -78,6 +264,7 @@ PRESENTCheckExtension(Display *dpy, int major, int minor)
 
     extension = xcb_get_extension_data(xcb_connection, &xcb_present_id);
     if (!(extension && extension->present)) {
+        ERR("PRESENT extension is not present\n");
         return FALSE;
     }
 
@@ -86,9 +273,11 @@ PRESENTCheckExtension(Display *dpy, int major, int minor)
     present_reply = xcb_present_query_version_reply(xcb_connection, present_cookie, &error);
     if (!present_reply) {
         free(error);
+        ERR("Issue getting requested version of PRESENT: %d,%d\n", major, minor);
         return FALSE;
     }
 
+    TRACE("PRESENT version %d,%d found. %d %d requested\n", major, minor, (int)present_reply->major_version, (int)present_reply->minor_version);
     free(present_reply);
 
     return TRUE;
@@ -122,6 +311,206 @@ DRI3Open(Display *dpy, int screen, int *device_fd)
     return TRUE;
 }
 
+#if D3DADAPTER9_WITHDRI2
+
+static XExtensionInfo _dri2_info_data;
+static XExtensionInfo *dri2_info = &_dri2_info_data;
+static char dri2_name[] = DRI2_NAME;
+
+#define DRI2CheckExtension(dpy, i, val) \
+  XextCheckExtension(dpy, i, dri2_name, val)
+
+
+static int
+close_display(Display *dpy,
+              XExtCodes *codes);
+static Bool
+wire_to_event(Display *dpy,
+              XEvent *re,
+              xEvent *event);
+static Status
+event_to_wire(Display *dpy,
+              XEvent *re,
+              xEvent *event);
+static int
+error( Display *dpy,
+       xError *err,
+       XExtCodes *codes,
+       int *ret_code );
+static XExtensionHooks dri2_hooks = {
+    NULL, /* create_gc */
+    NULL, /* copy_gc */
+    NULL, /* flush_gc */
+    NULL, /* free_gc */
+    NULL, /* create_font */
+    NULL, /* free_font */
+    close_display, /* close_display */
+    wire_to_event, /* wire_to_event */
+    event_to_wire, /* event_to_wire */
+    error, /* error */
+    NULL, /* error_string */
+};
+static XEXT_GENERATE_CLOSE_DISPLAY(close_display, dri2_info);
+static XEXT_GENERATE_FIND_DISPLAY(find_display, dri2_info,
+                                  dri2_name, &dri2_hooks, 0, NULL);
+static Bool
+wire_to_event(Display *dpy,
+              XEvent *re,
+              xEvent *event)
+{
+    XExtDisplayInfo *info = find_display(dpy);
+    DRI2CheckExtension(dpy, info, False);
+    TRACE("dri2 wire_to_event\n");
+    return False;
+}
+static Status
+event_to_wire(Display *dpy,
+              XEvent *re,
+              xEvent *event)
+{
+    XExtDisplayInfo *info = find_display(dpy);
+    DRI2CheckExtension(dpy, info, False);
+    TRACE("dri2 event_to_wire\n");
+    return False;
+}
+static int
+error(Display *dpy,
+      xError *err,
+      XExtCodes *codes,
+      int *ret_code)
+{
+    TRACE("dri2 error\n");
+    return False;
+}
+
+#define XALIGN(x) (((x) + 3) & (~3))
+
+static BOOL
+DRI2Connect(Display *dpy,
+            XID window,
+            unsigned driver_type,
+            char **device )
+{
+    XExtDisplayInfo *info = find_display(dpy);
+    xDRI2ConnectReply rep;
+    xDRI2ConnectReq *req;
+    int dev_len, driv_len;
+    char *driver;
+
+    DRI2CheckExtension(dpy, info, False);
+
+    LockDisplay(dpy);
+    GetReq(DRI2Connect, req);
+    req->reqType = info->codes->major_opcode;
+    req->dri2ReqType = X_DRI2Connect;
+    req->window = window;
+    req->driverType = driver_type;
+    if (!_XReply(dpy, (xReply *)&rep, 0, xFalse)) {
+        UnlockDisplay(dpy);
+        SyncHandle();
+        return False;
+    }
+
+    /* check string lengths */
+    dev_len = rep.deviceNameLength;
+    driv_len = rep.driverNameLength;
+    if (dev_len == 0 || driv_len == 0) {
+        _XEatData(dpy, XALIGN(dev_len) + XALIGN(driv_len));
+        UnlockDisplay(dpy);
+        SyncHandle();
+        return False;
+    }
+
+    /* read out driver */
+    driver = calloc(1, driv_len + 1);
+    if (!driver) {
+        _XEatData(dpy, XALIGN(dev_len) + XALIGN(driv_len));
+        UnlockDisplay(dpy);
+        SyncHandle();
+        return False;
+    }
+    _XReadPad(dpy, driver, driv_len);
+    free(driver); /* we don't need the driver */
+
+    /* read out device */
+    *device = calloc(1, dev_len + 1);
+    if (!*device) {
+        _XEatData(dpy, XALIGN(dev_len));
+        UnlockDisplay(dpy);
+        SyncHandle();
+        return False;
+    }
+    _XReadPad(dpy, *device, dev_len);
+    (*device)[dev_len] = '\0';
+
+    UnlockDisplay(dpy);
+    SyncHandle();
+
+    return True;
+}
+
+static Bool
+DRI2Authenticate(Display *dpy,
+                 XID window,
+                 uint32_t token)
+{
+    XExtDisplayInfo *info = find_display(dpy);
+    xDRI2AuthenticateReply rep;
+    xDRI2AuthenticateReq *req;
+
+    DRI2CheckExtension(dpy, info, False);
+
+    LockDisplay(dpy);
+    GetReq(DRI2Authenticate, req);
+    req->reqType = info->codes->major_opcode;
+    req->dri2ReqType = X_DRI2Authenticate;
+    req->window = window;
+    req->magic = token;
+    if (!_XReply(dpy, (xReply *)&rep, 0, xFalse)) {
+        UnlockDisplay(dpy);
+        SyncHandle();
+        return False;
+    }
+    UnlockDisplay(dpy);
+    SyncHandle();
+
+    return rep.authenticated ? True : False;
+}
+
+BOOL
+DRI2FallbackOpen(Display *dpy, int screen, int *device_fd)
+{
+    char *device;
+    int fd;
+    Window root = RootWindow(dpy, screen);
+    drm_auth_t auth;
+
+    if (!DRI2Connect(dpy, root, DRI2DriverDRI, &device))
+        return FALSE;
+
+    fd = open(device, O_RDWR);
+    free(device);
+    if (fd < 0)
+        return FALSE;
+
+    if (ioctl(fd, DRM_IOCTL_GET_MAGIC, &auth) != 0) {
+        close(fd);
+        return FALSE;
+    }
+
+    if (!DRI2Authenticate(dpy, root, auth.magic)) {
+        close(fd);
+        return FALSE;
+    }
+
+    *device_fd = fd;
+
+    return TRUE;
+}
+
+#endif
+
+
 BOOL
 DRI3PixmapFromDmaBuf(Display *dpy, int screen, int fd, int width, int height, int stride, int depth, int bpp, Pixmap *pixmap)
 {
@@ -138,7 +527,7 @@ DRI3PixmapFromDmaBuf(Display *dpy, int screen, int fd, int width, int height, in
                                                 depth, bpp, fd);
     error = xcb_request_check(xcb_connection, cookie); /* performs a flush */
     if (error) {
-        fprintf(stderr, "Error using DRI3 to convert a DmaBufFd to pixmap\n");
+        ERR("Error using DRI3 to convert a DmaBufFd to pixmap\n");
         return FALSE;
     }
     return TRUE;
@@ -189,6 +578,16 @@ struct PRESENTPixmapPriv {
     unsigned int depth;
     BOOL present_complete_pending;
     uint32_t serial;
+#if D3DADAPTER9_WITHDRI2
+    struct {
+        BOOL is_dri2;
+        struct DRI2priv *dri2_priv;
+        GLuint fbo_read;
+        GLuint fbo_write;
+        GLuint texture_read;
+        GLuint texture_write;
+    } dri2_info;
+#endif
     BOOL last_present_was_flip;
     PRESENTPixmapPriv *next;
 };
@@ -220,7 +619,7 @@ static void PRESENThandle_events(PRESENTpriv *present_priv, xcb_present_generic_
             }
             present_pixmap_priv = PRESENTFindPixmapPriv(present_priv, ce->serial);
             if (!present_pixmap_priv || ce->kind != XCB_PRESENT_COMPLETE_KIND_PIXMAP) {
-                fprintf(stderr, "FATAL ERROR: PRESENT handling failed\n");
+                ERR("FATAL ERROR: PRESENT handling failed\n");
                 free(ce);
                 return;
             }
@@ -241,7 +640,7 @@ static void PRESENThandle_events(PRESENTpriv *present_priv, xcb_present_generic_
             xcb_present_idle_notify_event_t *ie = (void *) ge;
             present_pixmap_priv = PRESENTFindPixmapPriv(present_priv, ie->serial);
             if (!present_pixmap_priv || present_pixmap_priv->pixmap != ie->pixmap) {
-                fprintf(stderr, "FATAL ERROR: PRESENT handling failed\n");
+                ERR("FATAL ERROR: PRESENT handling failed\n");
                 free(ie);
                 return;
             }
@@ -281,7 +680,7 @@ static BOOL PRESENTwait_events(PRESENTpriv *present_priv, BOOL allow_other_threa
         present_priv->xcb_wait = FALSE;
     }
     if (!ev) {
-        fprintf(stderr, "FATAL error: xcb had an error\n");
+        ERR("FATAL error: xcb had an error\n");
         return FALSE;
     }
 
@@ -363,7 +762,7 @@ static void PRESENTForceReleases(PRESENTpriv *present_priv)
     while (current) {
         if (!current->released) {
             if (!current->last_present_was_flip && !present_priv->xcb_wait) {
-                fprintf(stderr, "ERROR: a pixmap seems not released by PRESENT for no reason. Code bug.\n");
+                ERR("ERROR: a pixmap seems not released by PRESENT for no reason. Code bug.\n");
             } else {
                 /* Present the same pixmap with a non-valid part to force the copy mode and the releases */
                 xcb_xfixes_region_t valid, update;
@@ -423,7 +822,7 @@ static BOOL PRESENTPrivChangeWindow(PRESENTpriv *present_priv, XID window)
                                                                    eid, NULL);
         error = xcb_request_check(present_priv->xcb_connection, cookie); /* performs a flush */
         if (error || !present_priv->special_event) {
-            fprintf(stderr, "FAILED to use the X PRESENT extension. Was the destination a window ?\n");
+            ERR("FAILED to use the X PRESENT extension. Was the destination a window ?\n");
             if (present_priv->special_event)
                 xcb_unregister_for_special_event(present_priv->xcb_connection, present_priv->special_event);
             present_priv->special_event = NULL;
@@ -431,6 +830,28 @@ static BOOL PRESENTPrivChangeWindow(PRESENTpriv *present_priv, XID window)
         }
     }
     return (present_priv->window != 0);
+}
+
+/* Destroy the content, except the link and the struct mem */
+static void
+PRESENTDestroyPixmapContent(Display *dpy, PRESENTPixmapPriv *present_pixmap)
+{
+    XFreePixmap(dpy, present_pixmap->pixmap);
+#if D3DADAPTER9_WITHDRI2
+    if (present_pixmap->dri2_info.is_dri2) {
+        struct DRI2priv *dri2_priv = present_pixmap->dri2_info.dri2_priv;
+        EGLenum current_api;
+        current_api = eglQueryAPI();
+        eglBindAPI(EGL_OPENGL_API);
+        eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, dri2_priv->context);
+        glDeleteFramebuffers(1, &present_pixmap->dri2_info.fbo_read);
+        glDeleteFramebuffers(1, &present_pixmap->dri2_info.fbo_write);
+        glDeleteTextures(1, &present_pixmap->dri2_info.texture_read);
+        glDeleteTextures(1, &present_pixmap->dri2_info.texture_write);
+        eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        eglBindAPI(current_api);
+    }
+#endif
 }
 
 void
@@ -445,7 +866,7 @@ PRESENTDestroy(Display *dpy, PRESENTpriv *present_priv)
     current = present_priv->first_present_priv;
     while (current) {
         PRESENTPixmapPriv *next = current->next;
-        XFreePixmap(dpy, current->pixmap);
+        PRESENTDestroyPixmapContent(dpy, current);
         free(current);
         current = next;
     }
@@ -487,6 +908,9 @@ PRESENTPixmapInit(PRESENTpriv *present_priv, Pixmap pixmap, PRESENTPixmapPriv **
     (*present_pixmap_priv)->width = reply->width;
     (*present_pixmap_priv)->height = reply->height;
     (*present_pixmap_priv)->depth = reply->depth;
+#if D3DADAPTER9_WITHDRI2
+    (*present_pixmap_priv)->dri2_info.is_dri2 = FALSE;
+#endif
     free(reply);
 
     present_priv->last_serial_given++;
@@ -497,8 +921,141 @@ PRESENTPixmapInit(PRESENTpriv *present_priv, Pixmap pixmap, PRESENTPixmapPriv **
     return TRUE;
 }
 
+#if D3DADAPTER9_WITHDRI2
+
 BOOL
-PRESENTTryFreePixmap(PRESENTPixmapPriv *present_pixmap_priv)
+DRI2FallbackPRESENTPixmap(PRESENTpriv *present_priv, struct DRI2priv *dri2_priv,
+                          int fd, int width, int height, int stride, int depth,
+                          int bpp, PRESENTPixmapPriv **present_pixmap_priv)
+{
+    Window root = RootWindow(dri2_priv->dpy, DefaultScreen(dri2_priv->dpy));
+    Pixmap pixmap;
+    EGLImageKHR image;
+    GLuint texture_read, texture_write, fbo_read, fbo_write;
+    EGLint attribs[] = {
+        EGL_WIDTH, 0,
+        EGL_HEIGHT, 0,
+        EGL_LINUX_DRM_FOURCC_EXT, DRM_FORMAT_ARGB8888,
+        EGL_DMA_BUF_PLANE0_FD_EXT, 0,
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
+        EGL_DMA_BUF_PLANE0_PITCH_EXT, 0,
+        EGL_NONE
+    };
+    EGLenum current_api;
+    int status;
+
+    pthread_mutex_lock(&present_priv->mutex_present);
+
+    pixmap = XCreatePixmap(dri2_priv->dpy, root, width, height, 24);
+    if (!pixmap)
+        goto fail;
+
+    attribs[1] = width;
+    attribs[3] = height;
+    attribs[7] = fd;
+    attribs[11] = stride;
+
+    current_api = eglQueryAPI();
+    eglBindAPI(EGL_OPENGL_API);
+
+    /* We bind the dma-buf to a EGLImage, then to a texture, and then to a fbo.
+     * Note that we can delete the EGLImage, but we shouldn't delete the texture,
+     * else the fbo is invalid */
+
+    image = dri2_priv->eglCreateImageKHR_func(dri2_priv->display,
+                              EGL_NO_CONTEXT,
+                              EGL_LINUX_DMA_BUF_EXT,
+                              NULL, attribs);
+
+    if (image == EGL_NO_IMAGE_KHR)
+        goto fail;
+    close(fd);
+
+    eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, dri2_priv->context);
+
+    glGenTextures(1, &texture_read);
+    glBindTexture(GL_TEXTURE_2D, texture_read);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    dri2_priv->glEGLImageTargetTexture2DOES_func(GL_TEXTURE_2D, image);
+    glGenFramebuffers(1, &fbo_read);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_read);
+    glFramebufferTexture2D(GL_FRAMEBUFFER,
+                           GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, texture_read,
+                           0);
+    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+        goto fail;
+    glBindTexture(GL_TEXTURE_2D, 0);
+    eglDestroyImageKHR(dri2_priv->display, image);
+
+    /* We bind a newly created pixmap (to which we want to copy the content)
+     * to an EGLImage, then to a texture, then to a fbo. */
+    image = dri2_priv->eglCreateImageKHR_func(dri2_priv->display,
+                                              dri2_priv->context,
+                                              EGL_NATIVE_PIXMAP_KHR,
+                                              (void *)pixmap, NULL);
+    if (image == EGL_NO_IMAGE_KHR)
+        goto fail;
+
+    glGenTextures(1, &texture_write);
+    glBindTexture(GL_TEXTURE_2D, texture_write);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    dri2_priv->glEGLImageTargetTexture2DOES_func(GL_TEXTURE_2D, image);
+    glGenFramebuffers(1, &fbo_write);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_write);
+    glFramebufferTexture2D(GL_FRAMEBUFFER,
+                           GL_COLOR_ATTACHMENT0,
+                           GL_TEXTURE_2D, texture_write,
+                           0);
+    status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+        goto fail;
+    glBindTexture(GL_TEXTURE_2D, 0);
+    eglDestroyImageKHR(dri2_priv->display, image);
+
+    eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+    *present_pixmap_priv = (PRESENTPixmapPriv *) calloc(1, sizeof(PRESENTPixmapPriv));
+    if (!*present_pixmap_priv) {
+        goto fail;
+    }
+
+    (*present_pixmap_priv)->released = TRUE;
+    (*present_pixmap_priv)->pixmap = pixmap;
+    (*present_pixmap_priv)->present_priv = present_priv;
+    (*present_pixmap_priv)->next = present_priv->first_present_priv;
+    (*present_pixmap_priv)->width = width;
+    (*present_pixmap_priv)->height = height;
+    (*present_pixmap_priv)->depth = depth;
+    (*present_pixmap_priv)->dri2_info.is_dri2 = TRUE;
+    (*present_pixmap_priv)->dri2_info.dri2_priv = dri2_priv;
+    (*present_pixmap_priv)->dri2_info.fbo_read = fbo_read;
+    (*present_pixmap_priv)->dri2_info.fbo_write = fbo_write;
+    (*present_pixmap_priv)->dri2_info.texture_read = texture_read;
+    (*present_pixmap_priv)->dri2_info.texture_write = texture_write;
+
+    present_priv->last_serial_given++;
+    (*present_pixmap_priv)->serial = present_priv->last_serial_given;
+    present_priv->first_present_priv = *present_pixmap_priv;
+
+    eglBindAPI(current_api);
+
+    pthread_mutex_unlock(&present_priv->mutex_present);
+    return TRUE;
+fail:
+    eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    eglBindAPI(current_api);
+    pthread_mutex_unlock(&present_priv->mutex_present);
+    return FALSE;
+}
+
+#endif
+
+BOOL
+PRESENTTryFreePixmap(Display *dpy, PRESENTPixmapPriv *present_pixmap_priv)
 {
     PRESENTpriv *present_priv = present_pixmap_priv->present_priv;
     PRESENTPixmapPriv *current;
@@ -520,6 +1077,7 @@ PRESENTTryFreePixmap(PRESENTPixmapPriv *present_pixmap_priv)
         current = current->next;
     current->next = present_pixmap_priv->next;
 free_priv:
+    PRESENTDestroyPixmapContent(dpy, present_pixmap_priv);
     free(present_pixmap_priv);
     pthread_mutex_unlock(&present_priv->mutex_present);
     return TRUE;
@@ -566,6 +1124,10 @@ PRESENTPixmap(Display *dpy, XID window,
               const RECT *pSourceRect, const RECT *pDestRect, const RGNDATA *pDirtyRegion)
 {
     PRESENTpriv *present_priv = present_pixmap_priv->present_priv;
+#if D3DADAPTER9_WITHDRI2
+    struct DRI2priv *dri2_priv = present_pixmap_priv->dri2_info.dri2_priv;
+    EGLenum current_api;
+#endif
     xcb_void_cookie_t cookie;
     xcb_generic_error_t *error;
     int64_t target_msc, presentationInterval;
@@ -579,18 +1141,35 @@ PRESENTPixmap(Display *dpy, XID window,
         PRESENTPrivChangeWindow(present_priv, window);
 
     if (!window) {
-        fprintf(stderr, "ERROR: Try to Present a pixmap on a NULL window\n");
+        ERR("ERROR: Try to Present a pixmap on a NULL window\n");
         pthread_mutex_unlock(&present_priv->mutex_present);
         return FALSE;
     }
 
     PRESENTflush_events(present_priv, FALSE);
     if (!present_pixmap_priv->released || present_pixmap_priv->present_complete_pending) {
-        fprintf(stderr, "FATAL ERROR: Trying to Present a pixmap not released\n");
+        ERR("FATAL ERROR: Trying to Present a pixmap not released\n");
         pthread_mutex_unlock(&present_priv->mutex_present);
         return FALSE;
     }
+#if D3DADAPTER9_WITHDRI2
+    if (present_pixmap_priv->dri2_info.is_dri2) {
+        current_api = eglQueryAPI();
+        eglBindAPI(EGL_OPENGL_API);
+        eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, dri2_priv->context);
 
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, present_pixmap_priv->dri2_info.fbo_read);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, present_pixmap_priv->dri2_info.fbo_write);
+
+        glBlitFramebuffer(0, 0, present_pixmap_priv->width, present_pixmap_priv->height,
+                          0, 0, present_pixmap_priv->width, present_pixmap_priv->height,
+                          GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glFlush(); /* Perhaps useless */
+
+        eglMakeCurrent(dri2_priv->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        eglBindAPI(current_api);
+    }
+#endif
     target_msc = present_priv->last_msc;
     switch(pPresentationParameters->PresentationInterval) {
         case D3DPRESENT_INTERVAL_DEFAULT:
@@ -695,25 +1274,25 @@ PRESENTPixmap(Display *dpy, XID window,
         cookie_geom = xcb_get_geometry(present_priv->xcb_connection_bis, window);
         reply = xcb_get_geometry_reply(present_priv->xcb_connection_bis, cookie_geom, NULL);
 
-        fprintf(stderr, "Error using PRESENT. Here some debug info\n");
+        ERR("Error using PRESENT. Here some debug info\n");
         if (!reply) {
-            fprintf(stderr, "Error querying window info. Perhaps it doesn't exist anymore\n");
+            ERR("Error querying window info. Perhaps it doesn't exist anymore\n");
             pthread_mutex_unlock(&present_priv->mutex_present);
             return FALSE;
         }
-        fprintf(stderr, "Pixmap: width=%d, height=%d, depth=%d\n",
+        ERR("Pixmap: width=%d, height=%d, depth=%d\n",
             present_pixmap_priv->width, present_pixmap_priv->height,
             present_pixmap_priv->depth);
-        fprintf(stderr, "Window: width=%d, height=%d, depth=%d, x=%d, y=%d\n",
+        ERR("Window: width=%d, height=%d, depth=%d, x=%d, y=%d\n",
             (int) reply->width, (int) reply->height,
             (int) reply->depth, (int) reply->x, (int) reply->y);
-        fprintf(stderr, "Present parameter: PresentationInterval=%d, BackBufferCount=%d, Pending presentations=%d\n",
+        ERR("Present parameter: PresentationInterval=%d, BackBufferCount=%d, Pending presentations=%d\n",
             pPresentationParameters->PresentationInterval,
             pPresentationParameters->BackBufferCount,
             present_priv->pixmap_present_pending
            );
         if (present_pixmap_priv->depth != reply->depth)
-            fprintf(stderr, "Depths are different. PRESENT needs the pixmap and the window have same depth\n");
+            ERR("Depths are different. PRESENT needs the pixmap and the window have same depth\n");
         free(reply);
         pthread_mutex_unlock(&present_priv->mutex_present);
         return FALSE;
@@ -744,7 +1323,8 @@ PRESENTWaitPixmapReleased(PRESENTPixmapPriv *present_pixmap_priv)
             /* here the other thread got an event but hasn't treated it yet */
             pthread_mutex_unlock(&present_priv->mutex_xcb_wait);
             pthread_mutex_unlock(&present_priv->mutex_present);
-            sleep(1); /* Let it treat the event */
+            struct timespec duration = { 0, 10 * 1000*1000 };
+            nanosleep(&duration,NULL); /* Let it treat the event */
             pthread_mutex_lock(&present_priv->mutex_present);
         } else if (!PRESENTwait_events(present_priv, TRUE)) {
             pthread_mutex_unlock(&present_priv->mutex_present);

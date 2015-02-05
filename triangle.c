@@ -21,7 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
  */ 
 
-#include "d3d9.h"
+#include <d3d9.h>
 #include "Xnine.h"
 
 #include <unistd.h>
