@@ -488,7 +488,7 @@ static ID3DPresentVtbl Xnine_vtable = {
 
 struct D3DPresent_Xnine *D3DPresent_Xnine_create(struct Xnine_private *priv, HWND focus_wnd)
 {
-    struct D3DPresent_Xnine *This = calloc(1, sizeof(struct D3DPresent_Xnine *));
+    struct D3DPresent_Xnine *This = calloc(1, sizeof(struct D3DPresent_Xnine));
 
     if (!This)
         return NULL;
@@ -605,7 +605,7 @@ static ID3DPresentGroupVtbl XnineGroup_vtable = {
 
 struct D3DPresentGroup_Xnine *D3DPresentGroup_Xnine_create(struct Xnine_private *priv, HWND focus_wnd)
 {
-    struct D3DPresentGroup_Xnine *This = calloc(1, sizeof(struct D3DPresentGroup_Xnine *));
+    struct D3DPresentGroup_Xnine *This = calloc(1, sizeof(struct D3DPresentGroup_Xnine));
 
     if (!This)
         return NULL;
