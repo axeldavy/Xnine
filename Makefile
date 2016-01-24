@@ -33,6 +33,6 @@ dri3.o: dri3.c
 	gcc -c -g dri3.c -o dri3.o -I include/D3D9 -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
 
 clean:
-	rm $(XNINE) $(SDLNINE)
-	rm $(EXEC)
+	rm -f $(XNINE) $(SDLNINE)
+	rm -f $(EXEC)
 
