@@ -1098,7 +1098,9 @@ BOOL Xnine_init(int screen_num, struct Xnine_private **priv)
     res->screen_width = DisplayWidth(dpy, scrn_num);
     res->screen_height = DisplayHeight(dpy, scrn_num);
     res->d3d9_drm = d3d9_drm;
+#if D3DADAPTER9_WITHDRI2
     res->is_dri2_fallback = is_dri2_fallback;
+#endif
     *priv = res;
     return TRUE;
 }
