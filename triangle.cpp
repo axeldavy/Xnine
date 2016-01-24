@@ -47,8 +47,8 @@ static void triangle(struct IDirect3D9 *d3d9, struct Xnine_private *priv)
     D3DPRESENT_PARAMETERS d3dpp;
     IDirect3DDevice9 *device = NULL;
     IDirect3DVertexBuffer9 *vertex_buf = NULL;
-    int width = 800;
-    int height = 600;
+    int width = WIDTH;
+    int height = HEIGHT;
     HWND hwnd;
     void* pVoid;
 
