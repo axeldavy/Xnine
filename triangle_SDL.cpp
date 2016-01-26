@@ -107,7 +107,7 @@ static void fillin_present_parameters(SDL_Window* Window, int w, int h, bool ful
     memset(&d3dpp, 0, sizeof(d3dpp));
     d3dpp.Windowed = !fullscreen;
     d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
-    d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+    d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
     d3dpp.hDeviceWindow = FakeWnd;
     d3dpp.BackBufferFormat = D3DFMT_UNKNOWN;
     d3dpp.BackBufferWidth = w;
