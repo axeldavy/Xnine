@@ -3,10 +3,10 @@ D3DADAPTER9_LOCATION="/usr/lib/x86_64-linux-gnu/d3d/d3dadapter9.so"
 D3DADAPTER9_WITHDRI2=1
 
 XNINE=Xnine.o dri3.o
-ifneq ($D3DADAPTER9_WITHDRI2, 0)
-XNINE_LINK=-ldl -lEGL -lGL -lX11 -lXext -lxcb -lxcb-present -lxcb-dri3 -lxcb-xfixes -lX11-xcb
-else
 XNINE_LINK=-ldl -lX11 -lXext -lxcb -lxcb-present -lxcb-dri3 -lxcb-xfixes -lX11-xcb
+
+ifneq ($(D3DADAPTER9_WITHDRI2), 0)
+ XNINE_LINK+=-lEGL -lGL
 endif
 
 SDLNINE=SDL_nine.o dri3.o
@@ -33,6 +33,6 @@ dri3.o: dri3.c
 	gcc -c -g dri3.c -o dri3.o -I include/D3D9 -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
 
 clean:
-	rm $(XNINE) $(SDLNINE)
-	rm $(EXEC)
+	rm -f $(XNINE) $(SDLNINE)
+	rm -f $(EXEC)
 
