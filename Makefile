@@ -2,6 +2,9 @@ D3DADAPTER9_LOCATION="/usr/lib/x86_64-linux-gnu/d3d/d3dadapter9.so"
 
 D3DADAPTER9_WITHDRI2=1
 
+CC=gcc -g
+CXX=g++ -g
+
 XNINE=Xnine.o dri3.o
 XNINE_LINK=-ldl -lX11 -lXext -lxcb -lxcb-present -lxcb-dri3 -lxcb-xfixes -lX11-xcb
 
@@ -17,20 +20,20 @@ EXEC=triangle_c triangle_cpp triangle_SDL
 all: $(EXEC)
 
 triangle_c: $(XNINE) triangle.c
-	gcc triangle.c $(XNINE) $(XNINE_LINK) -I include/D3D9 -o triangle_c 
+	$(CC) triangle.c $(XNINE) $(XNINE_LINK) -I include/D3D9 -o triangle_c 
 
 triangle_cpp: $(XNINE) triangle.cpp
-	g++ triangle.cpp $(XNINE) $(XNINE_LINK) -I include/D3D9 -o triangle_cpp -I include/D3D9
+	$(CXX) triangle.cpp $(XNINE) $(XNINE_LINK) -I include/D3D9 -o triangle_cpp
 
 triangle_SDL: $(SDLNINE) triangle_SDL.cpp
-	g++ -g triangle_SDL.cpp $(SDLNINE) $(SDLNINE_LINK) -I include/D3D9 -I /usr/include/SDL2 -o triangle_SDL
+	$(CXX) triangle_SDL.cpp $(SDLNINE) $(SDLNINE_LINK) -I include/D3D9 -I /usr/include/SDL2 -o triangle_SDL
 
 Xnine.o: Xnine.c
-	gcc -c Xnine.c -o Xnine.o -I include/D3D9 -I include -DD3DADAPTERPATH='$(D3DADAPTER9_LOCATION)' -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
+	$(CC) -c Xnine.c -o Xnine.o -I include/D3D9 -I include -DD3DADAPTERPATH='$(D3DADAPTER9_LOCATION)' -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
 SDL_nine.o:  SDL_nine.c
-	gcc -c -g SDL_nine.c -o SDL_nine.o -I /usr/include/SDL2 -I include/D3D9 -I include -DD3DADAPTERPATH='$(D3DADAPTER9_LOCATION)' -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
+	$(CC) -c SDL_nine.c -o SDL_nine.o -I /usr/include/SDL2 -I include/D3D9 -I include -DD3DADAPTERPATH='$(D3DADAPTER9_LOCATION)' -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
 dri3.o: dri3.c
-	gcc -c -g dri3.c -o dri3.o -I include/D3D9 -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
+	$(CC) -c dri3.c -o dri3.o -I include/D3D9 -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
 
 clean:
 	rm -f $(XNINE) $(SDLNINE)
