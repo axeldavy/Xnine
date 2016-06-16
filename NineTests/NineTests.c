@@ -37,7 +37,7 @@ static int abs(int v) {
   return v > 0 ? v : -v;
 }
 
-#define broken(x) (x)
+#define broken(x) 0
 #ifdef PRINT_SUCCESS
 #define ok(c, ...) {if (!(c)) fprintf(stderr, "FAIL: "); else fprintf(stderr, "succ: "); fprintf(stderr, __VA_ARGS__);}
 #else
