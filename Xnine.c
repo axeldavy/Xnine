@@ -547,7 +547,6 @@ XnineGroup_Release(struct D3DPresentGroup_Xnine *This)
     uint32_t refs =  __sync_sub_and_fetch(&This->refs, 1);
     if (refs == 0) {
         Xnine_Release(This->present_backend);
-        free(This->present_backend);
         free(This);
     }
     return refs;
