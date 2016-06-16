@@ -436,7 +436,7 @@ done:
     DestroyWindow(window);
 }
 
-static void launch_tests()
+static void launch_tests(void)
 {
     test_depthbias();
 }
