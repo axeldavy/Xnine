@@ -1,0 +1,3 @@
+NineTests is a project to make some wine d3d9 tests available for gallium nine without requiring wine, using the Xnine library.
+
+NineTests uses modified wine code, and is LGPL licenced.
