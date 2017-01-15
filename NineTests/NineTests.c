@@ -28,14 +28,11 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 
 //#define PRINT_SUCCESS
 
-
-static int abs(int v) {
-  return v > 0 ? v : -v;
-}
 
 #define broken(x) 0
 #ifdef PRINT_SUCCESS
@@ -132,6 +129,11 @@ static DWORD getPixelColorFromSurface(IDirect3DSurface9 *surface, UINT x, UINT y
         case D3DFMT_A8R8G8B8:
         {
             color = ((DWORD *) lockedRect.pBits)[0];
+            break;
+        }
+        case D3DFMT_A32B32G32R32F:
+        {
+            color = ((DWORD *) lockedRect.pBits)[0]; /* Read R */
             break;
         }
         default:
@@ -436,9 +438,248 @@ done:
     DestroyWindow(window);
 }
 
+#ifndef D3DFVF_TEXCOORDSIZE1
+#define D3DFVF_TEXCOORDSIZE1(CoordIndex) (D3DFVF_TEXTUREFORMAT1 << (CoordIndex*2 + 16))
+#endif
+
+static float asfloat(D3DCOLOR color)
+{
+    union {
+        float f;
+        D3DCOLOR c;
+    } convert;
+    convert.c = color;
+    return convert.f;
+}
+
+static void fp_special_test2(void)
+{
+    /* Microsoft's assembler generates nan and inf with "1.#QNAN" and "1.#INF." respectively */
+    static const DWORD vs_basic[] =
+    {
+        0xfffe0300,                          /* vs_3_0           */
+        0x0200001f, 0x80000000, 0x900f0000,  /* dcl_position v0  */
+        0x0200001f, 0x80000005, 0x900f0001,  /* dcl_texcoord0 v1 */
+        0x0200001f, 0x80000000, 0xe00f0000,  /* dcl_position0 o0 */
+        0x0200001f, 0x80000005, 0xe00f0001,  /* dcl_texcoord0 o1 */
+        0x02000001, 0xe00f0000, 0x90e40000,  /* mov o0, v0       */
+        0x02000001, 0xe00f0001, 0x90e40001,  /* mov o1, v1       */
+        0x0000ffff,                          /* end              */
+
+    };
+
+    static const DWORD ps_header[] =
+    {
+        0xffff0300,                                                             /* ps_3_0                       */
+        0x05000051, 0xa00f0001, 0x7fc00000, 0xff800000, 0x7f800000, 0x00000000, /* def c1, nan, -inf, inf, 0    */
+        0x05000051, 0xa00f0002, 0x00000000, 0x3f000000, 0x3f800000, 0x40000000, /* def c2, 0.0, 0.5, 1.0, 2.0   */
+        0x0200001f, 0x80000005, 0x90030000,                                     /* dcl_texcoord0 v0.xy          */
+        0x02000001, 0x800f0000, 0xa0000002,                                     /* mov r0, c2.xxxx              */
+    };
+    static const DWORD ps_loadc0x[] = {0x02000001, 0x80010000, 0xa0000000};     /* mov r0.x, c0.x               */
+    static const DWORD ps_loadc0y[] = {0x02000001, 0x80010000, 0xa0550000};     /* mov r0.x, c0.y               */
+    static const DWORD ps_loadc0z[] = {0x02000001, 0x80010000, 0xa0aa0000};     /* mov r0.x, c0.z               */
+    static const DWORD ps_loadc1x[] = {0x02000001, 0x80010000, 0xa0000001};     /* mov r0.x, c1.x               */
+    static const DWORD ps_loadc1y[] = {0x02000001, 0x80010000, 0xa0550001};     /* mov r0.x, c1.y               */
+    static const DWORD ps_loadc1z[] = {0x02000001, 0x80010000, 0xa0aa0001};     /* mov r0.x, c1.z               */
+    static const DWORD ps_log0[] =    {0x0200000f, 0x80010000, 0x90000000};     /* log r0.x, v0.x               */
+    static const DWORD ps_log0cst[] = {0x0200000f, 0x80010000, 0xa0000002};     /* log r0.x, c2.x               */
+    /*static const DWORD ps_loginf[] =  {0x0200000f, 0x80010000, 0xa0aa0000};*/     /* log r0.x, c0.z               */
+    /*static const DWORD ps_logNaN[] =  {0x0200000f, 0x80010000, 0xa0000000};*/     /* log r0.x, c0.x               */
+    static const DWORD ps_nrm0[] =    {0x02000024, 0x80070000, 0x90000000};     /* nrm r0.xyz, v0.xxxx          */
+    static const DWORD ps_nrmm0[] =   {0x02000024, 0x80070000, 0x91000000};     /* nrm r0.xyz, -v0.xxxx         */
+    static const DWORD ps_nrm0cst[] = {0x02000024, 0x80070000, 0xa0000002};     /* nrm r0.xyz, c2.xxxx          */
+    /*static const DWORD ps_nrminf[] =  {0x02000024, 0x80070000, 0xa0aa0000};*/     /* nrm r0.xyz, c0.zzzz          */
+    /*static const DWORD ps_nrmminf[] = {0x02000024, 0x80070000, 0xa0550000};*/     /* nrm r0.xyz, c0.yyyy          */
+    /*static const DWORD ps_nrmNaN[] =  {0x02000024, 0x80070000, 0xa0000001};*/     /* nrm r0.xyz, c1.xxxx          */
+    static const DWORD ps_mul0NaN[] = {0x03000005, 0x80010000, 0xa0000000, 0xa0ff0000};    /* mul r0.x, c0.x, c0.w             */
+    static const DWORD ps_mul0inf[] = {0x03000005, 0x80010000, 0xa0ff0000, 0xa0aa0000};    /* mul r0.x, c0.w, c0.z             */
+    static const DWORD ps_mul0minf[] ={0x03000005, 0x80010000, 0xa0ff0000, 0xa0550000};    /* mul r0.x, c0.w, c0.y             */
+    static const DWORD ps_rcp0[] =    {0x02000006, 0x80010000, 0x90000000};     /* rcp r0.x, v0.x               */
+    static const DWORD ps_rcpm0[] =   {0x02000006, 0x80010000, 0x91000000};     /* rcp r0.x, -v0.x              */
+    /*static const DWORD ps_rcpinf[] =  {0x02000006, 0x80010000, 0xa0aa0000};     /* rcp r0.x, c0.z               */
+    /*static const DWORD ps_rcpminf[] = {0x02000006, 0x80010000, 0xa0550000};     /* rcp r0.x, c0.y              */
+    /*static const DWORD ps_rcpNaN[] =  {0x02000006, 0x80010000, 0xa0000001};     /* rcp r0.x, c1.x              */
+    static const DWORD ps_rsq0[] =    {0x02000007, 0x80010000, 0x90000000};     /* rsq r0.x, v0.x               */
+    static const DWORD ps_rsqm0[] =   {0x02000007, 0x80010000, 0x91000000};     /* rsq r0.x, -v0.x              */
+    /*static const DWORD ps_rsqinf[] =  {0x02000007, 0x80010000, 0xa0aa0000};*/     /* rsq r0.x, c0.z               */
+    /*static const DWORD ps_rsqminf[] = {0x02000007, 0x80010000, 0xa0550000};*/     /* rsq r0.x, c0.y              */
+    /*static const DWORD ps_rsqNaN[] =  {0x02000007, 0x80010000, 0xa0000001};*/     /* rsq r0.x, c1.x              */
+    static const DWORD ps_add05[] = {0x03000002, 0x80010000, 0x80000000, 0xa0550002};       /* add r0.x, r0.x, c2.y               */
+    static const DWORD ps_footer[] = {
+        0x02000001, 0x800f0800, 0x80e40000,                                     /* mov oC0, r0                  */
+        0x0000ffff,                                                             /* end                          */
+    };
+
+    static const struct
+    {
+        const char *name;
+        const DWORD *ops;
+        DWORD size;
+        BOOL isNaN;
+        D3DCOLOR output;
+        D3DCOLOR output2;
+    }
+    /* log, nrm, rcp and rsq with NaN and inf as inputs: gives the expected NaN(NaN as input), 0(inf as input)
+     * on AMD/NVidia, and weird result on intel */
+    tests[] =
+    {
+        {"user_cst_NaN",    ps_loadc0x,  sizeof(ps_loadc0x),  TRUE,  0x7fc00000, 0x7fc00000},
+        {"user_cst_minf",   ps_loadc0y,  sizeof(ps_loadc0x),  FALSE, 0xff800000, 0xff7fffff},
+        {"user_cst_inf",    ps_loadc0z,  sizeof(ps_loadc0x),  FALSE, 0x7f800000, 0x7f7fffff},
+        {"shader_cst_NaN",  ps_loadc1x,  sizeof(ps_loadc0x),  TRUE,  0x7fc00000, 0x7fc00000},
+        {"shader_cst_minf", ps_loadc1y,  sizeof(ps_loadc0x),  FALSE, 0xff800000, 0xff7fffff},
+        {"shader_cst_inf",  ps_loadc1z,  sizeof(ps_loadc0x),  FALSE, 0x7f800000, 0x7f7fffff},
+        {"shader_log0",     ps_log0,     sizeof(ps_log0),     FALSE, 0xff800000, 0xff7fffff},
+        {"shader_log0cst",  ps_log0cst,  sizeof(ps_log0cst),  FALSE, 0xff800000, 0xff7fffff},
+        {"shader_nrm0",     ps_nrm0,     sizeof(ps_nrm0),     FALSE, 0x00000000, 0x00000000},
+        {"shader_nrmm0",    ps_nrmm0,    sizeof(ps_nrmm0),    FALSE, 0x00000000, 0x80000000},
+        {"shader_nrm0cst",  ps_nrm0cst,  sizeof(ps_nrm0cst),  FALSE, 0x00000000, 0x00000000},
+        {"shader_mul0NaN",  ps_mul0NaN,  sizeof(ps_mul0NaN),  FALSE, 0x00000000, 0x00000000},
+        {"shader_mul0inf",  ps_mul0inf,  sizeof(ps_mul0inf),  FALSE, 0x00000000, 0x00000000},
+        {"shader_mul0minf", ps_mul0minf, sizeof(ps_mul0minf), FALSE, 0x00000000, 0x00000000},
+        {"shader_rcp0",     ps_rcp0,     sizeof(ps_rcp0),     FALSE, 0x7f800000, 0x7f7fffff},
+        {"shader_rcpm0",    ps_rcpm0,    sizeof(ps_rcpm0),    FALSE, 0xff800000, 0xff7fffff},
+        {"shader_rsq0",     ps_rsq0,     sizeof(ps_rsq0),     FALSE, 0x7f800000, 0x7f7fffff},
+        {"shader_rsqm0",    ps_rsqm0,    sizeof(ps_rsqm0),    FALSE, 0x7f800000, 0x7f7fffff},
+    };
+
+    struct
+    {
+        float x, y, z;
+        float s;
+    }
+    quad[] =
+    {
+        { -1.0f,  1.0f, 0.0f, 0.0f},
+        {  1.0f,  1.0f, 1.0f, 0.0f},
+        { -1.0f, -1.0f, 0.0f, 0.0f},
+        {  1.0f, -1.0f, 1.0f, 0.0f},
+    };
+
+    static D3DCOLOR c0[] = {0x7fc00000, 0xff800000, 0x7f800000, 0x00000000};
+
+    IDirect3DSurface9 *backbuffer, *surface;
+    IDirect3DVertexShader9 *vs;
+    IDirect3DDevice9 *device;
+    UINT body_size = 0;
+    IDirect3D9 *d3d;
+    DWORD *ps_code;
+    ULONG refcount;
+    D3DCAPS9 caps;
+    HWND window;
+    HRESULT hr;
+    UINT i;
+
+    window = create_window();
+    d3d = Direct3DCreate9(D3D_SDK_VERSION);
+    ok(!!d3d, "Failed to create a D3D object.\n");
+    if (!(device = create_device(d3d, window, window, TRUE)))
+    {
+        skip("Failed to create a D3D device, skipping tests.\n");
+        goto done;
+    }
+
+    hr = IDirect3DDevice9_GetDeviceCaps(device, &caps);
+    ok(SUCCEEDED(hr), "GetDeviceCaps failed, hr %#x.\n", hr);
+    if (caps.PixelShaderVersion < D3DPS_VERSION(3, 0) || caps.VertexShaderVersion < D3DVS_VERSION(3, 0))
+    {
+        skip("No shader model 3.0 support, skipping floating point specials test.\n");
+        IDirect3DDevice9_Release(device);
+        goto done;
+    }
+
+    if (FAILED(IDirect3D9_CheckDeviceFormat(d3d, D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, D3DFMT_X8R8G8B8,
+                D3DUSAGE_RENDERTARGET, D3DRTYPE_TEXTURE, D3DFMT_A32B32G32R32F)))
+    {
+        skip("Format ARGB32F not supported as render target, skipping test.\n");
+        goto done;
+    }
+
+     hr = IDirect3DDevice9_CreateRenderTarget(device, 640, 480, D3DFMT_A32B32G32R32F,
+            D3DMULTISAMPLE_NONE, 0, TRUE, &surface, NULL );
+    ok(hr == D3D_OK, "Unable to create render target surface, hr = %08x\n", hr);
+
+    hr = IDirect3DDevice9_GetBackBuffer(device, 0, 0, D3DBACKBUFFER_TYPE_MONO, &backbuffer);
+    ok(SUCCEEDED(hr), "GetBackBuffer failed, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetFVF(device, D3DFVF_XYZ | D3DFVF_TEX1 | D3DFVF_TEXCOORDSIZE1(0));
+    ok(SUCCEEDED(hr), "SetFVF failed, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_CreateVertexShader(device, vs_basic, &vs);
+    ok(SUCCEEDED(hr), "CreateVertexShader failed, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetVertexShader(device, vs);
+    ok(SUCCEEDED(hr), "SetVertexShader failed, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetPixelShaderConstantF(device, 0, (float *)c0, 1);
+    ok(hr == D3D_OK, "IDirect3DDevice9_SetPixelShaderConstantF returned %08x\n", hr);
+
+    hr = IDirect3DDevice9_SetRenderState(device, D3DRS_ZENABLE, D3DZB_FALSE);
+    ok(SUCCEEDED(hr), "SetRenderState failed, hr %#x.\n", hr);
+
+    hr = IDirect3DDevice9_SetRenderTarget(device, 0, surface);
+    ok(SUCCEEDED(hr), "SetRenderTarget failed, hr %#x.\n", hr);
+
+    for (i = 0; i < sizeof(tests) / sizeof(*tests); ++i)
+    {
+        if (tests[i].size > body_size) body_size = tests[i].size;
+    }
+
+    ps_code = malloc(sizeof(ps_header) + body_size + sizeof(ps_add05) + sizeof(ps_footer));
+    memcpy(ps_code, ps_header, sizeof(ps_header));
+
+    for (i = 0; i < sizeof(tests) / sizeof(*tests); ++i)
+    {
+        DWORD offset = sizeof(ps_header) / sizeof(*ps_header);
+        IDirect3DPixelShader9 *ps;
+        D3DCOLOR color;
+
+        memcpy(ps_code + offset, tests[i].ops, tests[i].size);
+        offset += tests[i].size / sizeof(*tests[i].ops);
+        memcpy(ps_code + offset, ps_footer, sizeof(ps_footer));
+
+        hr = IDirect3DDevice9_CreatePixelShader(device, ps_code, &ps);
+        ok(SUCCEEDED(hr), "CreatePixelShader failed, hr %#x.\n", hr);
+        hr = IDirect3DDevice9_SetPixelShader(device, ps);
+        ok(SUCCEEDED(hr), "SetPixelShader failed, hr %#x.\n", hr);
+
+        hr = IDirect3DDevice9_BeginScene(device);
+        ok(SUCCEEDED(hr), "BeginScene failed, hr %#x.\n", hr);
+        hr = IDirect3DDevice9_DrawPrimitiveUP(device, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(*quad));
+        ok(SUCCEEDED(hr), "DrawPrimitiveUP failed, hr %#x.\n", hr);
+        hr = IDirect3DDevice9_EndScene(device);
+        ok(SUCCEEDED(hr), "EndScene failed, hr %#x.\n", hr);
+
+        color = getPixelColorFromSurface(surface, 320, 240);
+        ok((tests[i].isNaN && isnan(asfloat(color))) || color == tests[i].output || color == tests[i].output2,
+                "Expected color 0x%08x or 0x%08x for instruction \"%s\", got 0x%08x.\n",
+                tests[i].output, tests[i].output2, tests[i].name, color);
+
+        hr = IDirect3DDevice9_SetPixelShader(device, NULL);
+        ok(SUCCEEDED(hr), "SetPixelShader failed, hr %#x.\n", hr);
+        IDirect3DPixelShader9_Release(ps);
+    }
+
+    free(ps_code);
+
+     hr = IDirect3DDevice9_SetRenderTarget(device, 0, backbuffer);
+    ok(SUCCEEDED(hr), "SetRenderTarget failed, hr %#x.\n", hr);
+    hr = IDirect3DDevice9_SetVertexShader(device, NULL);
+    ok(SUCCEEDED(hr), "SetVertexShader failed, hr %#x.\n", hr);
+    IDirect3DVertexShader9_Release(vs);
+    IDirect3DSurface9_Release(surface);
+    IDirect3DSurface9_Release(backbuffer);
+    refcount = IDirect3DDevice9_Release(device);
+    ok(!refcount, "Device has %u references left.\n", refcount);
+done:
+    IDirect3D9_Release(d3d);
+    DestroyWindow(window);
+}
+
 static void launch_tests(void)
 {
     test_depthbias();
+    fp_special_test2();
 }
 
 int main() {
