@@ -410,7 +410,7 @@ NineDevice9_GetDirect3D(struct NineDevice9 *This,
 {
     void **vtable_mirror;
     printf("NineDevice9_GetDirect3D\n");
-    HRESULT hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->NineDevice9_GetDirect3D(This, &vtable_mirror);
+    HRESULT hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->GetDirect3D(This, &vtable_mirror);
     /* ppD3D9 is the IDirect3D9 version. Let's get the _alt */
     ppD3D9 = (void*)(vtable_mirror-1);
     
