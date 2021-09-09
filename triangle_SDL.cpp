@@ -15,9 +15,9 @@
 #define ERR(...)    fprintf(stderr, __VA_ARGS__)
 
 // global declarations
-LPDIRECT3D9EX d3d;    // the pointer to our Direct3D interface
-LPDIRECT3DDEVICE9EX d3ddev;    // the pointer to the device class
-LPDIRECT3DVERTEXBUFFER9 v_buffer = NULL;    // the pointer to the vertex buffer
+LPDIRECT3D9EX_alt d3d;    // the pointer to our Direct3D interface
+LPDIRECT3DDEVICE9EX_alt d3ddev;    // the pointer to the device class
+LPDIRECT3DVERTEXBUFFER9_alt v_buffer = NULL;    // the pointer to the vertex buffer
 
 void render_frame(void);    // renders a single frame
 void init_graphics(void);    // 3D declarations
@@ -57,7 +57,7 @@ void render_frame(void)
 }
 
 // this is the function that puts the 3D models into video RAM
-void load_triangle(int w, int h, LPDIRECT3DVERTEXBUFFER9 v_buffer)
+void load_triangle(int w, int h, LPDIRECT3DVERTEXBUFFER9_alt v_buffer)
 {
     float hs = (float)(w > h ? h : w) * 0.4f;
     float cx = (float)w * 0.5f;
