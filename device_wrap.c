@@ -992,7 +992,7 @@ TEX3D_WRAP1(HRESULT, UnlockBox, UINT)
 TEX3D_WRAP1(HRESULT, AddDirtyBox, const D3DBOX *)
 
 static HRESULT ALT_WINAPI ALT_DECLSPEC_HOTPATCH 
-NineTexture9_GetVolumeLevel(IDirect3DVolumeTexture9 *This, UINT Level, IDirect3DVolume9 **ppVolumeLevel)
+NineVolumeTexture9_GetVolumeLevel(IDirect3DVolumeTexture9 *This, UINT Level, IDirect3DVolume9 **ppVolumeLevel)
 {    HRESULT hr;
 
     hr = ((IDirect3DVolumeTexture9_Minor1 *)This)->lpVtbl_internal->GetVolumeLevel(This, Level, ppVolumeLevel);
@@ -1023,7 +1023,7 @@ IDirect3DVolumeTexture9Vtbl NineVolumeTexture9_vtable = {
     (void *)NineTexture9_GetAutoGenFilterType,
     (void *)NineTexture9_GenerateMipSubLevels,
     (void *)NineTexture9_GetLevelDesc, /* immutable */
-    //(void *)NineVolumeTexture9_GetVolumeLevel, /* AddRef */
+    (void *)NineVolumeTexture9_GetVolumeLevel, /* AddRef */
     (void *)NineVolumeTexture9_LockBox,
     (void *)NineVolumeTexture9_UnlockBox,
     (void *)NineVolumeTexture9_AddDirtyBox
