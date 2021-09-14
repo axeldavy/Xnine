@@ -12,18 +12,18 @@
 #define ALT_DECLSPEC_HOTPATCH 
 typedef struct common_vtable {
 	/* IUnknown */
-	HRESULT (ALT_WINAPI *QueryInterface)(void *This, REFIID riid, void **ppvObject);
-	ULONG (ALT_WINAPI *AddRef)(void *This);
-	ULONG (ALT_WINAPI *Release)(void *This);
+	HRESULT (WINAPI *QueryInterface)(void *This, REFIID riid, void **ppvObject);
+	ULONG (WINAPI *AddRef)(void *This);
+	ULONG (WINAPI *Release)(void *This);
 	/* IDirect3DResource9 */
-	HRESULT (ALT_WINAPI *GetDevice)(void *This, IDirect3DDevice9 **ppDevice);
-	HRESULT (ALT_WINAPI *SetPrivateData)(IDirect3DIndexBuffer9 *This, REFGUID refguid, const void *pData, DWORD SizeOfData, DWORD Flags);
-	HRESULT (ALT_WINAPI *GetPrivateData)(IDirect3DIndexBuffer9 *This, REFGUID refguid, void *pData, DWORD *pSizeOfData);
-	HRESULT (ALT_WINAPI *FreePrivateData)(IDirect3DIndexBuffer9 *This, REFGUID refguid);
-	DWORD (ALT_WINAPI *SetPriority)(IDirect3DIndexBuffer9 *This, DWORD PriorityNew);
-	DWORD (ALT_WINAPI *GetPriority)(IDirect3DIndexBuffer9 *This);
-	void (ALT_WINAPI *PreLoad)(IDirect3DIndexBuffer9 *This);
-	D3DRESOURCETYPE (ALT_WINAPI *GetType)(IDirect3DIndexBuffer9 *This);
+	HRESULT (WINAPI *GetDevice)(void *This, IDirect3DDevice9 **ppDevice);
+	HRESULT (WINAPI *SetPrivateData)(IDirect3DIndexBuffer9 *This, REFGUID refguid, const void *pData, DWORD SizeOfData, DWORD Flags);
+	HRESULT (WINAPI *GetPrivateData)(IDirect3DIndexBuffer9 *This, REFGUID refguid, void *pData, DWORD *pSizeOfData);
+	HRESULT (WINAPI *FreePrivateData)(IDirect3DIndexBuffer9 *This, REFGUID refguid);
+	DWORD (WINAPI *SetPriority)(IDirect3DIndexBuffer9 *This, DWORD PriorityNew);
+	DWORD (WINAPI *GetPriority)(IDirect3DIndexBuffer9 *This);
+	void (WINAPI *PreLoad)(IDirect3DIndexBuffer9 *This);
+	D3DRESOURCETYPE (WINAPI *GetType)(IDirect3DIndexBuffer9 *This);
 } common_vtable;
 
 typedef struct common_wrap {
@@ -104,7 +104,7 @@ typedef struct IDirect3DSurface9_Minor1 IDirect3DSurface9_Minor1;
         return ((IDirect3DSurface9_Minor1 *)This)->lpVtbl_internal->func(This, arg1, arg2, arg3); \
     }
 
-SURFACE_WRAP2(HRESULT, GetContainer, REFIID, void**)
+SURFACE_WRAP2(HRESULT, GetContainer, REFIID, void**) /* Parent interfaces are already wrapped */
 SURFACE_WRAP1(HRESULT, GetDesc, D3DSURFACE_DESC*)
 SURFACE_WRAP3(HRESULT, LockRect, D3DLOCKED_RECT *, const RECT *, DWORD)
 SURFACE_WRAP0(HRESULT, UnlockRect)
@@ -129,6 +129,82 @@ static IDirect3DSurface9Vtbl NineSurface9_vtable = {
     (void *)NineSurface9_UnlockRect,
     (void *)NineSurface9_GetDC,
     (void *)NineSurface9_ReleaseDC
+};
+
+struct IDirect3DVolume9_Minor1
+{
+        IDirect3DVolume9Vtbl *lpVtbl;
+        IDirect3DVolume9Vtbl *lpVtbl_internal;
+};
+typedef struct IDirect3DVolume9_Minor1 IDirect3DVolume9_Minor1;
+
+#define VOLUME_WRAP0(ret, func)  \
+    ret ALT_WINAPI NineVolume9_ ## func(void *This) \
+    { \
+        return ((IDirect3DVolume9_Minor1 *)This)->lpVtbl_internal->func(This); \
+    }
+
+#define VOLUME_WRAP1(ret, func, type1)  \
+    ret ALT_WINAPI NineVolume9_ ## func(void *This, type1 arg1) \
+    { \
+        return ((IDirect3DVolume9_Minor1 *)This)->lpVtbl_internal->func(This, arg1); \
+    }
+
+#define VOLUME_WRAP2(ret, func, type1, type2)  \
+    ret ALT_WINAPI NineVolume9_ ## func(void *This, type1 arg1, type2 arg2) \
+    { \
+        return ((IDirect3DVolume9_Minor1 *)This)->lpVtbl_internal->func(This, arg1, arg2); \
+    }
+
+#define VOLUME_WRAP3(ret, func, type1, type2, type3)  \
+    ret ALT_WINAPI NineVolume9_ ## func(void *This, type1 arg1, type2 arg2, type3 arg3) \
+    { \
+        return ((IDirect3DVolume9_Minor1 *)This)->lpVtbl_internal->func(This, arg1, arg2, arg3); \
+    }
+
+VOLUME_WRAP2(HRESULT, GetContainer, REFIID, void**) /* Parent interfaces are already wrapped */
+VOLUME_WRAP1(HRESULT, GetDesc, D3DVOLUME_DESC*)
+VOLUME_WRAP3(HRESULT, LockBox, D3DLOCKED_BOX *, const D3DBOX *, DWORD)
+VOLUME_WRAP0(HRESULT, UnlockBox)
+
+static IDirect3DVolume9Vtbl NineVolume9_vtable = {
+    (void *)Nine_QueryInterface,
+    (void *)Nine_AddRef,
+    (void *)Nine_Release,
+    (void *)Nine_GetDevice, /* actually part of  iface */
+    (void *)Nine_SetPrivateData,
+    (void *)Nine_GetPrivateData,
+    (void *)Nine_FreePrivateData,
+    (void *)NineVolume9_GetContainer,
+    (void *)NineVolume9_GetDesc, /* immutable */
+    (void *)NineVolume9_LockBox,
+    (void *)NineVolume9_UnlockBox
+};
+
+struct IDirect3DStateBlock9_Minor1
+{
+        IDirect3DStateBlock9Vtbl *lpVtbl;
+        IDirect3DStateBlock9Vtbl *lpVtbl_internal;
+};
+
+typedef struct IDirect3DStateBlock9_Minor1 IDirect3DStateBlock9_Minor1;
+
+#define STATEBLOCK_WRAP0(ret, func)  \
+    ret ALT_WINAPI NineStateBlock9_ ## func(void *This) \
+    { \
+        return ((IDirect3DStateBlock9_Minor1 *)This)->lpVtbl_internal->func(This); \
+    }
+
+STATEBLOCK_WRAP0(HRESULT, Capture)
+STATEBLOCK_WRAP0(HRESULT, Apply)
+
+static IDirect3DStateBlock9Vtbl NineStateBlock9_vtable = {
+    (void *)Nine_QueryInterface,
+    (void *)Nine_AddRef,
+    (void *)Nine_Release,
+    (void *)Nine_GetDevice, /* actually part of StateBlock9 iface */
+    (void *)NineStateBlock9_Capture,
+    (void *)NineStateBlock9_Apply
 };
 
 
@@ -413,8 +489,62 @@ NineDevice9_GetDirect3D(struct NineDevice9 *This,
     HRESULT hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->GetDirect3D(This, &vtable_mirror);
     /* ppD3D9 is the IDirect3D9 version. Let's get the _alt */
     ppD3D9 = (void*)(vtable_mirror-1);
-    
-    
+}
+
+static HRESULT ALT_WINAPI
+NineDevice9_GetRenderTarget(IDirect3DDevice9Ex *This, DWORD s, IDirect3DSurface9 **ppSurface)
+{   
+    HRESULT hr;
+
+    hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->GetRenderTarget(This, s, ppSurface);
+    if (FAILED(hr))
+        return hr;
+
+    (*ppSurface)->lpVtbl = (IDirect3DSurface9Vtbl *)&NineSurface9_vtable;
+
+    return hr;
+}
+
+static HRESULT ALT_WINAPI
+NineDevice9_GetDepthStencilSurface(IDirect3DDevice9Ex *This, IDirect3DSurface9 **ppSurface)
+{   
+    HRESULT hr;
+
+    hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->GetDepthStencilSurface(This, ppSurface);
+    if (FAILED(hr))
+        return hr;
+
+    (*ppSurface)->lpVtbl = (IDirect3DSurface9Vtbl *)&NineSurface9_vtable;
+
+    return hr;
+}
+
+static HRESULT ALT_WINAPI
+NineDevice9_CreateStateBlock(IDirect3DDevice9Ex *This, D3DSTATEBLOCKTYPE type, IDirect3DStateBlock9 **ppSB)
+{   
+    HRESULT hr;
+
+    hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->CreateStateBlock(This, type, ppSB);
+    if (FAILED(hr))
+        return hr;
+
+    (*ppSB)->lpVtbl = (IDirect3DStateBlock9Vtbl *)&NineStateBlock9_vtable;
+
+    return hr;
+}
+
+static HRESULT ALT_WINAPI
+NineDevice9_EndStateBlock(IDirect3DDevice9Ex *This, IDirect3DStateBlock9 **ppSB)
+{   
+    HRESULT hr;
+
+    hr = ((IDirect3DDevice9Ex_Minor1 *)This)->lpVtbl_internal->EndStateBlock(This, ppSB);
+    if (FAILED(hr))
+        return hr;
+
+    (*ppSB)->lpVtbl = (IDirect3DStateBlock9Vtbl *)&NineStateBlock9_vtable;
+
+    return hr;
 }
 
 DEVICE_WRAP2(HRESULT, QueryInterface, REFIID, void **)
@@ -445,8 +575,8 @@ DEVICE_WRAP2(HRESULT, GetFrontBufferData, UINT, IDirect3DSurface9 *)
 DEVICE_WRAP5(HRESULT, StretchRect, IDirect3DSurface9 *, const RECT *, IDirect3DSurface9 *, const RECT *, D3DTEXTUREFILTERTYPE)
 DEVICE_WRAP3(HRESULT, ColorFill, IDirect3DSurface9 *, const RECT *, D3DCOLOR)
 DEVICE_WRAP2(HRESULT, SetRenderTarget, DWORD, IDirect3DSurface9 *)
-DEVICE_WRAP2(HRESULT, GetRenderTarget, DWORD, IDirect3DSurface9 **)
-DEVICE_WRAP1(HRESULT, GetDepthStencilSurface, IDirect3DSurface9 **)
+//DEVICE_WRAP2(HRESULT, GetRenderTarget, DWORD, IDirect3DSurface9 **)
+//DEVICE_WRAP1(HRESULT, GetDepthStencilSurface, IDirect3DSurface9 **)
 DEVICE_WRAP1(HRESULT, SetDepthStencilSurface, IDirect3DSurface9 *)
 DEVICE_WRAP0(HRESULT, BeginScene)
 DEVICE_H_WRAP0(HRESULT, EndScene)
@@ -466,9 +596,9 @@ DEVICE_WRAP2(HRESULT, SetClipPlane, DWORD, const float *)
 DEVICE_WRAP2(HRESULT, GetClipPlane, DWORD, float *)
 DEVICE_H_WRAP2(HRESULT, SetRenderState, D3DRENDERSTATETYPE, DWORD)
 DEVICE_WRAP2(HRESULT, GetRenderState, D3DRENDERSTATETYPE, DWORD *)
-DEVICE_WRAP2(HRESULT, CreateStateBlock, D3DSTATEBLOCKTYPE, IDirect3DStateBlock9 **)
+//DEVICE_WRAP2(HRESULT, CreateStateBlock, D3DSTATEBLOCKTYPE, IDirect3DStateBlock9 **)
 DEVICE_WRAP0(HRESULT, BeginStateBlock)
-DEVICE_WRAP1(HRESULT, EndStateBlock, IDirect3DStateBlock9 **)
+//DEVICE_WRAP1(HRESULT, EndStateBlock, IDirect3DStateBlock9 **)
 DEVICE_WRAP1(HRESULT, SetClipStatus, const D3DCLIPSTATUS9 *)
 DEVICE_WRAP1(HRESULT, GetClipStatus, D3DCLIPSTATUS9 *)
 DEVICE_WRAP2(HRESULT, GetTexture, DWORD, IDirect3DBaseTexture9 **)
@@ -536,19 +666,19 @@ DEVICE_H_WRAP2(HRESULT, ResetEx, D3DPRESENT_PARAMETERS *, D3DDISPLAYMODEEX *)
 DEVICE_WRAP3(HRESULT, GetDisplayModeEx, UINT, D3DDISPLAYMODEEX *, D3DDISPLAYROTATION *)
 
 IDirect3DSwapChain9ExVtbl NineSwapChain9Ex_vtable = {
-    NineSwapChain9_QueryInterface,
-    NineSwapChain9_AddRef,
-    NineSwapChain9_Release,
-    NineSwapChain9_Present,
-    NineSwapChain9_GetFrontBufferData,
-    NineSwapChain9_GetBackBuffer,
-    NineSwapChain9_GetRasterStatus,
-    NineSwapChain9_GetDisplayMode,
-    NineSwapChain9_GetDevice,
-    NineSwapChain9_GetPresentParameters,
-    NineSwapChain9_GetLastPresentCount,
-    NineSwapChain9_GetPresentStats,
-    NineSwapChain9_GetDisplayModeEx
+    (void *)NineSwapChain9_QueryInterface,
+    (void *)NineSwapChain9_AddRef,
+    (void *)NineSwapChain9_Release,
+    (void *)NineSwapChain9_Present,
+    (void *)NineSwapChain9_GetFrontBufferData,
+    (void *)NineSwapChain9_GetBackBuffer,
+    (void *)NineSwapChain9_GetRasterStatus,
+    (void *)NineSwapChain9_GetDisplayMode,
+    (void *)NineSwapChain9_GetDevice,
+    (void *)NineSwapChain9_GetPresentParameters,
+    (void *)NineSwapChain9_GetLastPresentCount,
+    (void *)NineSwapChain9_GetPresentStats,
+    (void *)NineSwapChain9_GetDisplayModeEx
 };
 
 HRESULT ALT_WINAPI ALT_DECLSPEC_HOTPATCH NineDevice9_CreateAdditionalSwapChain(IDirect3DDevice9Ex *This, D3DPRESENT_PARAMETERS *pPresentationParameters, IDirect3DSwapChain9 **pSwapChain)
@@ -736,7 +866,7 @@ typedef struct IDirect3DQuery9_Minor1 IDirect3DQuery9_Minor1;
         return ((IDirect3DQuery9_Minor1 *)This)->lpVtbl_internal->func(This, arg1, arg2, arg3); \
     }
 
-QUERY_WRAP0(D3DRESOURCETYPE, GetType)
+QUERY_WRAP0(D3DQUERYTYPE, GetType)
 QUERY_WRAP0(DWORD, GetDataSize)
 QUERY_WRAP1(HRESULT, Issue, DWORD)
 QUERY_WRAP3(HRESULT, GetData, void *, DWORD, DWORD)
@@ -856,10 +986,23 @@ typedef struct IDirect3DVolumeTexture9_Minor1 IDirect3DVolumeTexture9_Minor1;
         return ((IDirect3DVolumeTexture9_Minor1 *)This)->lpVtbl_internal->func(This, arg1, arg2, arg3, arg4); \
     }
 
-TEX3D_WRAP2(HRESULT, GetVolumeLevel, UINT, IDirect3DVolume9 **)
+//TEX3D_WRAP2(HRESULT, GetVolumeLevel, UINT, IDirect3DVolume9 **)
 TEX3D_WRAP4(HRESULT, LockBox, UINT, D3DLOCKED_BOX *, const D3DBOX *, DWORD)
 TEX3D_WRAP1(HRESULT, UnlockBox, UINT)
 TEX3D_WRAP1(HRESULT, AddDirtyBox, const D3DBOX *)
+
+static HRESULT ALT_WINAPI ALT_DECLSPEC_HOTPATCH 
+NineTexture9_GetVolumeLevel(IDirect3DVolumeTexture9 *This, UINT Level, IDirect3DVolume9 **ppVolumeLevel)
+{    HRESULT hr;
+
+    hr = ((IDirect3DVolumeTexture9_Minor1 *)This)->lpVtbl_internal->GetVolumeLevel(This, Level, ppVolumeLevel);
+    if (FAILED(hr))
+        return hr;
+
+    (*ppVolumeLevel)->lpVtbl = (IDirect3DVolume9Vtbl *)&NineVolume9_vtable;
+
+    return hr;
+}
 
 IDirect3DVolumeTexture9Vtbl NineVolumeTexture9_vtable = {
     (void *)Nine_QueryInterface,
@@ -880,7 +1023,7 @@ IDirect3DVolumeTexture9Vtbl NineVolumeTexture9_vtable = {
     (void *)NineTexture9_GetAutoGenFilterType,
     (void *)NineTexture9_GenerateMipSubLevels,
     (void *)NineTexture9_GetLevelDesc, /* immutable */
-    (void *)NineVolumeTexture9_GetVolumeLevel, /* AddRef */
+    //(void *)NineVolumeTexture9_GetVolumeLevel, /* AddRef */
     (void *)NineVolumeTexture9_LockBox,
     (void *)NineVolumeTexture9_UnlockBox,
     (void *)NineVolumeTexture9_AddDirtyBox
@@ -922,10 +1065,23 @@ typedef struct IDirect3DCubeTexture9_Minor1 IDirect3DCubeTexture9_Minor1;
         return ((IDirect3DCubeTexture9_Minor1 *)This)->lpVtbl_internal->func(This, arg1, arg2, arg3, arg4, arg5); \
     }
 CUBE_WRAP2(HRESULT, GetLevelDesc, UINT, D3DSURFACE_DESC*)
-CUBE_WRAP3(HRESULT, GetCubeMapSurface, D3DCUBEMAP_FACES, UINT, IDirect3DSurface9 **)
+//CUBE_WRAP3(HRESULT, GetCubeMapSurface, D3DCUBEMAP_FACES, UINT, IDirect3DSurface9 **)
 CUBE_WRAP5(HRESULT, LockRect, D3DCUBEMAP_FACES, UINT, D3DLOCKED_RECT *, const RECT *, DWORD)
 CUBE_WRAP2(HRESULT, UnlockRect, D3DCUBEMAP_FACES, UINT)
 CUBE_WRAP2(HRESULT, AddDirtyRect, D3DCUBEMAP_FACES, const RECT *)
+
+static HRESULT ALT_WINAPI ALT_DECLSPEC_HOTPATCH 
+NineCubeTexture9_GetCubeMapSurface(IDirect3DCubeTexture9 *This, D3DCUBEMAP_FACES FaceType, UINT Level, IDirect3DSurface9 **ppCubeMapSurface)
+{    HRESULT hr;
+
+    hr = ((IDirect3DCubeTexture9_Minor1 *)This)->lpVtbl_internal->GetCubeMapSurface(This, FaceType, Level, ppCubeMapSurface);
+    if (FAILED(hr))
+        return hr;
+
+    (*ppCubeMapSurface)->lpVtbl = (IDirect3DSurface9Vtbl *)&NineSurface9_vtable;
+
+    return hr;
+}
 
 static IDirect3DCubeTexture9Vtbl NineCubeTexture9_vtable = {
     (void *)Nine_QueryInterface,
@@ -1039,140 +1195,140 @@ NineDevice9_CreateVertexBuffer(IDirect3DDevice9Ex *This, UINT Length, DWORD Usag
 }
 
 static IDirect3DDevice9ExVtbl NineDevice9_vtable = {
-    NineDevice9_QueryInterface,
-    NineDevice9_AddRef,
-    NineDevice9_Release,
-    NineDevice9_TestCooperativeLevel,
-    NineDevice9_GetAvailableTextureMem,
-    NineDevice9_EvictManagedResources,
-    NineDevice9_GetDirect3D,
-    NineDevice9_GetDeviceCaps,
-    NineDevice9_GetDisplayMode,
-    NineDevice9_GetCreationParameters,
-    NineDevice9_SetCursorProperties,
-    NineDevice9_SetCursorPosition,
-    NineDevice9_ShowCursor,
-    NineDevice9_CreateAdditionalSwapChain,
-    NineDevice9_GetSwapChain,
-    NineDevice9_GetNumberOfSwapChains,
-    NineDevice9_Reset,
-    NineDevice9_Present,
-    NineDevice9_GetBackBuffer,
-    NineDevice9_GetRasterStatus,
-    NineDevice9_SetDialogBoxMode,
-    NineDevice9_SetGammaRamp,
-    NineDevice9_GetGammaRamp,
-    NineDevice9_CreateTexture,
-    NineDevice9_CreateVolumeTexture,
-    NineDevice9_CreateCubeTexture,
-    NineDevice9_CreateVertexBuffer,
-    NineDevice9_CreateIndexBuffer,
-    NineDevice9_CreateRenderTarget,
-    NineDevice9_CreateDepthStencilSurface,
-    NineDevice9_UpdateSurface,
-    NineDevice9_UpdateTexture,
-    NineDevice9_GetRenderTargetData,
-    NineDevice9_GetFrontBufferData,
-    NineDevice9_StretchRect,
-    NineDevice9_ColorFill,
-    NineDevice9_CreateOffscreenPlainSurface,
-    NineDevice9_SetRenderTarget,
-    NineDevice9_GetRenderTarget,
-    NineDevice9_SetDepthStencilSurface,
-    NineDevice9_GetDepthStencilSurface,
-    NineDevice9_BeginScene,
-    NineDevice9_EndScene,
-    NineDevice9_Clear,
-    NineDevice9_SetTransform,
-    NineDevice9_GetTransform,
-    NineDevice9_MultiplyTransform,
-    NineDevice9_SetViewport,
-    NineDevice9_GetViewport,
-    NineDevice9_SetMaterial,
-    NineDevice9_GetMaterial,
-    NineDevice9_SetLight,
-    NineDevice9_GetLight,
-    NineDevice9_LightEnable,
-    NineDevice9_GetLightEnable,
-    NineDevice9_SetClipPlane,
-    NineDevice9_GetClipPlane,
-    NineDevice9_SetRenderState,
-    NineDevice9_GetRenderState,
-    NineDevice9_CreateStateBlock,
-    NineDevice9_BeginStateBlock,
-    NineDevice9_EndStateBlock,
-    NineDevice9_SetClipStatus,
-    NineDevice9_GetClipStatus,
-    NineDevice9_GetTexture,
-    NineDevice9_SetTexture,
-    NineDevice9_GetTextureStageState,
-    NineDevice9_SetTextureStageState,
-    NineDevice9_GetSamplerState,
-    NineDevice9_SetSamplerState,
-    NineDevice9_ValidateDevice,
-    NineDevice9_SetPaletteEntries,
-    NineDevice9_GetPaletteEntries,
-    NineDevice9_SetCurrentTexturePalette,
-    NineDevice9_GetCurrentTexturePalette,
-    NineDevice9_SetScissorRect,
-    NineDevice9_GetScissorRect,
-    NineDevice9_SetSoftwareVertexProcessing,
-    NineDevice9_GetSoftwareVertexProcessing,
-    NineDevice9_SetNPatchMode,
-    NineDevice9_GetNPatchMode,
-    NineDevice9_DrawPrimitive,
-    NineDevice9_DrawIndexedPrimitive,
-    NineDevice9_DrawPrimitiveUP,
-    NineDevice9_DrawIndexedPrimitiveUP,
-    NineDevice9_ProcessVertices,
-    NineDevice9_CreateVertexDeclaration,
-    NineDevice9_SetVertexDeclaration,
-    NineDevice9_GetVertexDeclaration,
-    NineDevice9_SetFVF,
-    NineDevice9_GetFVF,
-    NineDevice9_CreateVertexShader,
-    NineDevice9_SetVertexShader,
-    NineDevice9_GetVertexShader,
-    NineDevice9_SetVertexShaderConstantF,
-    NineDevice9_GetVertexShaderConstantF,
-    NineDevice9_SetVertexShaderConstantI,
-    NineDevice9_GetVertexShaderConstantI,
-    NineDevice9_SetVertexShaderConstantB,
-    NineDevice9_GetVertexShaderConstantB,
-    NineDevice9_SetStreamSource,
-    NineDevice9_GetStreamSource,
-    NineDevice9_SetStreamSourceFreq,
-    NineDevice9_GetStreamSourceFreq,
-    NineDevice9_SetIndices,
-    NineDevice9_GetIndices,
-    NineDevice9_CreatePixelShader,
-    NineDevice9_SetPixelShader,
-    NineDevice9_GetPixelShader,
-    NineDevice9_SetPixelShaderConstantF,
-    NineDevice9_GetPixelShaderConstantF,
-    NineDevice9_SetPixelShaderConstantI,
-    NineDevice9_GetPixelShaderConstantI,
-    NineDevice9_SetPixelShaderConstantB,
-    NineDevice9_GetPixelShaderConstantB,
-    NineDevice9_DrawRectPatch,
-    NineDevice9_DrawTriPatch,
-    NineDevice9_DeletePatch,
-    NineDevice9_CreateQuery,
-    NineDevice9_SetConvolutionMonoKernel,
-    NineDevice9_ComposeRects,
-    NineDevice9_PresentEx,
-    NineDevice9_GetGPUThreadPriority,
-    NineDevice9_SetGPUThreadPriority,
-    NineDevice9_WaitForVBlank,
-    NineDevice9_CheckResourceResidency,
-    NineDevice9_SetMaximumFrameLatency,
-    NineDevice9_GetMaximumFrameLatency,
-    NineDevice9_CheckDeviceState,
-    NineDevice9_CreateRenderTargetEx,
-    NineDevice9_CreateOffscreenPlainSurfaceEx,
-    NineDevice9_CreateDepthStencilSurfaceEx,
-    NineDevice9_ResetEx,
-    NineDevice9_GetDisplayModeEx
+    (void *)NineDevice9_QueryInterface,
+    (void *)NineDevice9_AddRef,
+    (void *)NineDevice9_Release,
+    (void *)NineDevice9_TestCooperativeLevel,
+    (void *)NineDevice9_GetAvailableTextureMem,
+    (void *)NineDevice9_EvictManagedResources,
+    (void *)NineDevice9_GetDirect3D,
+    (void *)NineDevice9_GetDeviceCaps,
+    (void *)NineDevice9_GetDisplayMode,
+    (void *)NineDevice9_GetCreationParameters,
+    (void *)NineDevice9_SetCursorProperties,
+    (void *)NineDevice9_SetCursorPosition,
+    (void *)NineDevice9_ShowCursor,
+    (void *)NineDevice9_CreateAdditionalSwapChain,
+    (void *)NineDevice9_GetSwapChain,
+    (void *)NineDevice9_GetNumberOfSwapChains,
+    (void *)NineDevice9_Reset,
+    (void *)NineDevice9_Present,
+    (void *)NineDevice9_GetBackBuffer,
+    (void *)NineDevice9_GetRasterStatus,
+    (void *)NineDevice9_SetDialogBoxMode,
+    (void *)NineDevice9_SetGammaRamp,
+    (void *)NineDevice9_GetGammaRamp,
+    (void *)NineDevice9_CreateTexture,
+    (void *)NineDevice9_CreateVolumeTexture,
+    (void *)NineDevice9_CreateCubeTexture,
+    (void *)NineDevice9_CreateVertexBuffer,
+    (void *)NineDevice9_CreateIndexBuffer,
+    (void *)NineDevice9_CreateRenderTarget,
+    (void *)NineDevice9_CreateDepthStencilSurface,
+    (void *)NineDevice9_UpdateSurface,
+    (void *)NineDevice9_UpdateTexture,
+    (void *)NineDevice9_GetRenderTargetData,
+    (void *)NineDevice9_GetFrontBufferData,
+    (void *)NineDevice9_StretchRect,
+    (void *)NineDevice9_ColorFill,
+    (void *)NineDevice9_CreateOffscreenPlainSurface,
+    (void *)NineDevice9_SetRenderTarget,
+    (void *)NineDevice9_GetRenderTarget,
+    (void *)NineDevice9_SetDepthStencilSurface,
+    (void *)NineDevice9_GetDepthStencilSurface,
+    (void *)NineDevice9_BeginScene,
+    (void *)NineDevice9_EndScene,
+    (void *)NineDevice9_Clear,
+    (void *)NineDevice9_SetTransform,
+    (void *)NineDevice9_GetTransform,
+    (void *)NineDevice9_MultiplyTransform,
+    (void *)NineDevice9_SetViewport,
+    (void *)NineDevice9_GetViewport,
+    (void *)NineDevice9_SetMaterial,
+    (void *)NineDevice9_GetMaterial,
+    (void *)NineDevice9_SetLight,
+    (void *)NineDevice9_GetLight,
+    (void *)NineDevice9_LightEnable,
+    (void *)NineDevice9_GetLightEnable,
+    (void *)NineDevice9_SetClipPlane,
+    (void *)NineDevice9_GetClipPlane,
+    (void *)NineDevice9_SetRenderState,
+    (void *)NineDevice9_GetRenderState,
+    (void *)NineDevice9_CreateStateBlock,
+    (void *)NineDevice9_BeginStateBlock,
+    (void *)NineDevice9_EndStateBlock,
+    (void *)NineDevice9_SetClipStatus,
+    (void *)NineDevice9_GetClipStatus,
+    (void *)NineDevice9_GetTexture,
+    (void *)NineDevice9_SetTexture,
+    (void *)NineDevice9_GetTextureStageState,
+    (void *)NineDevice9_SetTextureStageState,
+    (void *)NineDevice9_GetSamplerState,
+    (void *)NineDevice9_SetSamplerState,
+    (void *)NineDevice9_ValidateDevice,
+    (void *)NineDevice9_SetPaletteEntries,
+    (void *)NineDevice9_GetPaletteEntries,
+    (void *)NineDevice9_SetCurrentTexturePalette,
+    (void *)NineDevice9_GetCurrentTexturePalette,
+    (void *)NineDevice9_SetScissorRect,
+    (void *)NineDevice9_GetScissorRect,
+    (void *)NineDevice9_SetSoftwareVertexProcessing,
+    (void *)NineDevice9_GetSoftwareVertexProcessing,
+    (void *)NineDevice9_SetNPatchMode,
+    (void *)NineDevice9_GetNPatchMode,
+    (void *)NineDevice9_DrawPrimitive,
+    (void *)NineDevice9_DrawIndexedPrimitive,
+    (void *)NineDevice9_DrawPrimitiveUP,
+    (void *)NineDevice9_DrawIndexedPrimitiveUP,
+    (void *)NineDevice9_ProcessVertices,
+    (void *)NineDevice9_CreateVertexDeclaration,
+    (void *)NineDevice9_SetVertexDeclaration,
+    (void *)NineDevice9_GetVertexDeclaration,
+    (void *)NineDevice9_SetFVF,
+    (void *)NineDevice9_GetFVF,
+    (void *)NineDevice9_CreateVertexShader,
+    (void *)NineDevice9_SetVertexShader,
+    (void *)NineDevice9_GetVertexShader,
+    (void *)NineDevice9_SetVertexShaderConstantF,
+    (void *)NineDevice9_GetVertexShaderConstantF,
+    (void *)NineDevice9_SetVertexShaderConstantI,
+    (void *)NineDevice9_GetVertexShaderConstantI,
+    (void *)NineDevice9_SetVertexShaderConstantB,
+    (void *)NineDevice9_GetVertexShaderConstantB,
+    (void *)NineDevice9_SetStreamSource,
+    (void *)NineDevice9_GetStreamSource,
+    (void *)NineDevice9_SetStreamSourceFreq,
+    (void *)NineDevice9_GetStreamSourceFreq,
+    (void *)NineDevice9_SetIndices,
+    (void *)NineDevice9_GetIndices,
+    (void *)NineDevice9_CreatePixelShader,
+    (void *)NineDevice9_SetPixelShader,
+    (void *)NineDevice9_GetPixelShader,
+    (void *)NineDevice9_SetPixelShaderConstantF,
+    (void *)NineDevice9_GetPixelShaderConstantF,
+    (void *)NineDevice9_SetPixelShaderConstantI,
+    (void *)NineDevice9_GetPixelShaderConstantI,
+    (void *)NineDevice9_SetPixelShaderConstantB,
+    (void *)NineDevice9_GetPixelShaderConstantB,
+    (void *)NineDevice9_DrawRectPatch,
+    (void *)NineDevice9_DrawTriPatch,
+    (void *)NineDevice9_DeletePatch,
+    (void *)NineDevice9_CreateQuery,
+    (void *)NineDevice9_SetConvolutionMonoKernel,
+    (void *)NineDevice9_ComposeRects,
+    (void *)NineDevice9_PresentEx,
+    (void *)NineDevice9_GetGPUThreadPriority,
+    (void *)NineDevice9_SetGPUThreadPriority,
+    (void *)NineDevice9_WaitForVBlank,
+    (void *)NineDevice9_CheckResourceResidency,
+    (void *)NineDevice9_SetMaximumFrameLatency,
+    (void *)NineDevice9_GetMaximumFrameLatency,
+    (void *)NineDevice9_CheckDeviceState,
+    (void *)NineDevice9_CreateRenderTargetEx,
+    (void *)NineDevice9_CreateOffscreenPlainSurfaceEx,
+    (void *)NineDevice9_CreateDepthStencilSurfaceEx,
+    (void *)NineDevice9_ResetEx,
+    (void *)NineDevice9_GetDisplayModeEx
 };
 
 void *get_device_vtable()
