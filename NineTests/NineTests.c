@@ -39,13 +39,13 @@
 
 #define broken(x) 0
 #ifdef PRINT_SUCCESS
-#define ok(c, ...) {{if (!(c)) fprintf(stderr, "FAIL: "); else fprintf(stderr, "succ: "); fprintf(stderr, __VA_ARGS__);}}
+#define ok(c, ...) {{if (!(c)) fprintf(stderr, "FAIL(%u): ", __LINE__); else fprintf(stderr, "succ: "); fprintf(stderr, __VA_ARGS__);}}
 #else
-#define ok(c, ...) {{if (!(c)) {fprintf(stderr, "FAIL: ");fprintf(stderr, __VA_ARGS__);}}}
+#define ok(c, ...) {{if (!(c)) {fprintf(stderr, "FAIL(%u): ", __LINE__);fprintf(stderr, __VA_ARGS__);}}}
 #endif
-#define skip(...) {fprintf(stderr, "skip: "); fprintf(stderr, __VA_ARGS__);}
-#define win_skip(...) {fprintf(stderr, "skip: "); fprintf(stderr, __VA_ARGS__);}
-#define trace(...) {fprintf(stderr, "trace: ");fprintf(stderr, __VA_ARGS__);}
+#define skip(...) {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);}
+#define win_skip(...) {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);}
+#define trace(...) {fprintf(stderr, "trace(%u): ", __LINE__);fprintf(stderr, __VA_ARGS__);}
 
 #define ZeroMemory(p, n) memset(p, 0, n)
 
