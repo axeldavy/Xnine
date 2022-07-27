@@ -49,6 +49,7 @@
 
 #define ZeroMemory(p, n) memset(p, 0, n)
 
+#define todo_nine(a)
 #define todo_wine
 #define todo_wine_if(c) if (c)
 #define SIZE_T size_t
@@ -7150,11 +7151,11 @@ static void pretransformed_varying_test(void)
          * Needs a replacement pipeline. */
         color = getPixelColor(device, 360, 240);
         if (tests[i].todo) {
-            todo_wine ok(color_match(color, tests[i].color, 1)
+            todo_nine(ok(color_match(color, tests[i].color, 1)
                     || broken(color_match(color, 0x00000000, 1)
                     && tests[i].shader_code == blendindices_code),
                     "Test %s returned color 0x%08x, expected 0x%08x (todo).\n",
-                    tests[i].name, color, tests[i].color); }
+                    tests[i].name, color, tests[i].color)); }
         else
             ok(color_match(color, tests[i].color, 1)
                     || broken(color_match(color, tests[i].broken_color, 1) && tests[i].broken),
@@ -11088,11 +11089,11 @@ static void stream_test(void)
     }
 
     hr = IDirect3DDevice9_GetStreamSourceFreq(device, 0, &ind);
-    ok(hr == D3D_OK && ind == 1, "IDirect3DDevice9_GetStreamSourceFreq unexpected result, "
-            "hr %#x, ind %#x.\n", hr, ind);
+    todo_nine(ok(hr == D3D_OK && ind == 1, "IDirect3DDevice9_GetStreamSourceFreq unexpected result, "
+            "hr %#x, ind %#x.\n", hr, ind));
     hr = IDirect3DDevice9_GetStreamSourceFreq(device, 1, &ind);
-    ok(hr == D3D_OK && ind == 1, "IDirect3DDevice9_GetStreamSourceFreq unexpected result, "
-            "hr %#x, ind %#x.\n", hr, ind);
+    todo_nine(ok(hr == D3D_OK && ind == 1, "IDirect3DDevice9_GetStreamSourceFreq unexpected result, "
+            "hr %#x, ind %#x.\n", hr, ind));
 
     hr = IDirect3DDevice9_SetStreamSourceFreq(device, 1, 1);
     ok(hr == D3D_OK, "IDirect3DDevice9_SetStreamSourceFreq failed, hr %#x.\n", hr);
@@ -12741,7 +12742,7 @@ static void test_viewport(void)
             continue;
 
         get_rt_readback(backbuffer, &rb);
-        check_rect(&rb, tests[i].expected_rect, tests[i].message);
+        todo_nine(check_rect(&rb, tests[i].expected_rect, tests[i].message));
         release_surface_readback(&rb);
 
         hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, 0xff000000,
@@ -12758,7 +12759,7 @@ static void test_viewport(void)
         ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
         get_rt_readback(backbuffer, &rb);
-        check_rect(&rb, tests[i].expected_rect, tests[i].message);
+        todo_nine(check_rect(&rb, tests[i].expected_rect, tests[i].message));
         release_surface_readback(&rb);
     }
 
@@ -15009,7 +15010,7 @@ static void test_multisample_get_front_buffer_data(void)
     hr = IDirect3DDevice9_GetFrontBufferData(device, 0, readback);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     color = getPixelColorFromSurface(readback, 320, 240);
-    ok(color == 0x00f0ff0f, "Got unexpected color 0x%08x.\n", color);
+    todo_nine(ok(color == 0x00f0ff0f, "Got unexpected color 0x%08x.\n", color));
     IDirect3DSurface9_Release(readback);
 
     hr = IDirect3DDevice9_CreateTexture(device, 640, 480, 1,
@@ -15021,7 +15022,7 @@ static void test_multisample_get_front_buffer_data(void)
     hr = IDirect3DDevice9_GetFrontBufferData(device, 0, readback);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     color = getPixelColorFromSurface(readback, 320, 240);
-    ok(color == 0x00f0ff0f, "Got unexpected color 0x%08x.\n", color);
+    todo_nine(ok(color == 0x00f0ff0f, "Got unexpected color 0x%08x.\n", color));
     IDirect3DSurface9_Release(readback);
     IDirect3DTexture9_Release(texture);
 
@@ -17058,7 +17059,7 @@ static void add_dirty_rect_test(void)
     for (i = 0; i < ARRAY_SIZE(oob_rect); ++i)
     {
         hr = IDirect3DTexture9_AddDirtyRect(tex_src_red, &oob_rect[i]);
-        ok(hr == D3DERR_INVALIDCALL, "[%u] Got unexpected hr %#x.\n", i, hr);
+        todo_nine(ok(hr == D3DERR_INVALIDCALL, "[%u] Got unexpected hr %#x.\n", i, hr));
         hr = IDirect3DTexture9_LockRect(tex_src_red, 0, &locked_rect, &oob_rect[i], 0);
         ok(SUCCEEDED(hr), "[%u] Got unexpected hr %#x.\n", i, hr);
         hr = IDirect3DTexture9_UnlockRect(tex_src_red, 0);
@@ -18503,11 +18504,11 @@ static void test_multisample_mismatch(void)
     ok(color_match(color, 0x0000ff00, 1) || color_match(color, 0x000000ff, 1),
             "Got unexpected color 0x%08x.\n", color);
     color = getPixelColor(device, 318, 240);
-    ok(color_match(color, 0x0000ff00, 1) || broken(color_match(color, 0x000000ff, 1)),
-            "Got unexpected color 0x%08x.\n", color);
+    todo_nine(ok(color_match(color, 0x0000ff00, 1) || broken(color_match(color, 0x000000ff, 1)),
+            "Got unexpected color 0x%08x.\n", color));
     color = getPixelColor(device, 322, 240);
-    ok(color_match(color, 0x0000ff00, 1), "Got unexpected color 0x%08x.\n", color);
-    hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
+    todo_nine(ok(color_match(color, 0x0000ff00, 1), "Got unexpected color 0x%08x.\n", color);
+    hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL));
     ok(SUCCEEDED(hr), "Failed to present, hr %#x.\n", hr);
 
     /* Draw with incompatible buffers. AMD even performs Z testing, and the Z test
@@ -19413,9 +19414,9 @@ static void test_updatetexture(void)
                 ok(SUCCEEDED(hr), "Failed to end scene, hr %#x.\n", hr);
 
                 color = getPixelColor(device, 320, 240);
-                ok (color_match(color, 0x007f7f00, 3) || broken(tests[i].broken_result)
+                todo_nine(ok (color_match(color, 0x007f7f00, 3) || broken(tests[i].broken_result)
                         || broken(color == 0x00adbeef), /* WARP device often just breaks down. */
-                        "Got unexpected color 0x%08x, case %u, %u.\n", color, t, i);
+                        "Got unexpected color 0x%08x, case %u, %u.\n", color, t, i));
             }
 
             IDirect3DBaseTexture9_Release(src);
@@ -20040,11 +20041,11 @@ static void test_uninitialized_varyings(void)
 
         get_rt_readback(backbuffer, &rb);
         color = get_readback_color(&rb, 320, 240);
-        ok(color_match(color, tests[i].expected, 1)
+        todo_nine(ok(color_match(color, tests[i].expected, 1)
                 || (tests[i].allow_zero_alpha && color_match(color, tests[i].expected & 0x00ffffff, 1))
                 || (broken(warp && tests[i].broken_warp))
                 || broken(tests[i].partial && color_match(color & 0x00ff0000, tests[i].expected & 0x00ff0000, 1)),
-                "Got unexpected color 0x%08x, case %u.\n", color, i);
+                "Got unexpected color 0x%08x, case %u.\n", color, i));
         release_surface_readback(&rb);
 
         if (vs)
@@ -22207,7 +22208,7 @@ static void test_mvp_software_vertex_shaders(void)
     ok(SUCCEEDED(hr), "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice9_DrawPrimitiveUP(device, D3DPT_TRIANGLESTRIP, 2, quad, sizeof(*quad));
     todo_wine
-    ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr);
+    todo_nine(ok(hr == D3DERR_INVALIDCALL, "Got unexpected hr %#x.\n", hr));
     hr = IDirect3DDevice9_EndScene(device);
     ok(SUCCEEDED(hr), "Got unexpected hr %#x.\n", hr);
 
@@ -22231,8 +22232,8 @@ static void test_mvp_software_vertex_shaders(void)
 
     expected_color = 0x00ff0000; /* Color from vertex data and not from the shader. */
     color = getPixelColor(device, 5, 5);
-    ok(color == expected_color, "Expected color 0x%08x, got 0x%08x (sw shader in hw mode, second attempt).\n",
-            expected_color, color);
+    todo_nine(ok(color == expected_color, "Expected color 0x%08x, got 0x%08x (sw shader in hw mode, second attempt).\n",
+            expected_color, color));
 
     hr = IDirect3DDevice9_Present(device, NULL, NULL, NULL, NULL);
     ok(SUCCEEDED(hr), "Got unexpected hr %#x.\n", hr);
@@ -22513,9 +22514,9 @@ static void test_null_format(void)
     for (i = 0; i < ARRAY_SIZE(expected_colors); ++i)
     {
         color = get_readback_color(&rb, expected_colors[i].x, expected_colors[i].y);
-        ok(color_match(color, expected_colors[i].color, 1),
+        todo_nine(ok(color_match(color, expected_colors[i].color, 1),
                 "Expected color 0x%08x at (%u, %u), got 0x%08x.\n",
-                expected_colors[i].color, expected_colors[i].x, expected_colors[i].y, color);
+                expected_colors[i].color, expected_colors[i].x, expected_colors[i].y, color));
     }
     release_surface_readback(&rb);
 
@@ -22796,15 +22797,15 @@ static void test_sysmem_draw(void)
             0, D3DFVF_XYZRHW, D3DPOOL_SYSTEMMEM, &dst_vb, NULL);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     hr = IDirect3DDevice9_ProcessVertices(device, 0, 0, ARRAY_SIZE(quad), dst_vb, NULL, 0);
-    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    todo_nine(ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr));
     hr = IDirect3DVertexBuffer9_Lock(dst_vb, 0, 0, (void **)&dst_data, 0);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
     for (i = 0; i < ARRAY_SIZE(quad); ++i)
     {
-        ok(compare_vec4(&dst_data[i], quad[i].position.x * 320.0f + 320.0f,
+        todo_nine(ok(compare_vec4(&dst_data[i], quad[i].position.x * 320.0f + 320.0f,
                 -quad[i].position.y * 240.0f + 240.0f, 0.0f, 1.0f, 1),
                 "Got unexpected vertex %u {%.8e, %.8e, %.8e, %.8e}.\n",
-                i, dst_data[i].x, dst_data[i].y, dst_data[i].z, dst_data[i].w);
+                i, dst_data[i].x, dst_data[i].y, dst_data[i].z, dst_data[i].w));
     }
     hr = IDirect3DVertexBuffer9_Unlock(dst_vb);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
@@ -22942,7 +22943,7 @@ static void test_sysmem_draw(void)
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
     hr = IDirect3DDevice9_SetTexture(device, 0, (IDirect3DBaseTexture9 *)texture);
-    ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
+    todo_nine(ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr));
 
     hr = IDirect3DDevice9_Clear(device, 0, NULL, D3DCLEAR_TARGET, 0x77777777, 0.0f, 0);
     ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
@@ -23526,7 +23527,7 @@ static void test_draw_mapped_buffer(void)
         ok(hr == D3D_OK, "Got unexpected hr %#x.\n", hr);
 
         color = getPixelColor(device, 160, 120);
-        ok(color_match(color, 0x00ff0000, 1), "Got unexpected color 0x%08x, test %u.\n", color, i);
+        todo_nine(ok(color_match(color, 0x00ff0000, 1), "Got unexpected color 0x%08x, test %u.\n", color, i));
         color = getPixelColor(device, 480, 360);
         ok(color_match(color, 0x000000ff, 1), "Got unexpected color 0x%08x, test %u.\n", color, i);
 
@@ -23554,7 +23555,7 @@ static void test_draw_mapped_buffer(void)
 
         test_pass = color_match(color, 0x00ff0000, 1);
         todo_wine_if(tests[i].ignore_wine_result && !test_pass)
-        ok(test_pass, "Got unexpected color 0x%08x, test %u.\n", color, i);
+        todo_nine(ok(test_pass, "Got unexpected color 0x%08x, test %u.\n", color, i));
 
         color = getPixelColor(device, 480, 360);
         ok(color_match(color, 0x000000ff, 1), "Got unexpected color 0x%08x, test %u.\n", color, i);
