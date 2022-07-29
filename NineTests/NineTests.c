@@ -341,7 +341,7 @@ static IDirect3DDevice9 *create_device(IDirect3D9 *d3d, HWND device_window, HWND
 
     present_parameters.Windowed = windowed;
     present_parameters.hDeviceWindow = device_window;
-    present_parameters.SwapEffect = D3DSWAPEFFECT_DISCARD;
+    present_parameters.SwapEffect = D3DSWAPEFFECT_COPY; /* some tests reuse the backbuffer content */
     present_parameters.BackBufferWidth = 640;
     present_parameters.BackBufferHeight = 480;
     present_parameters.BackBufferFormat = D3DFMT_A8R8G8B8;
