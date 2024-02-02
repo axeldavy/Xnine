@@ -11,6 +11,7 @@ D3DADAPTER9_WITHDRI2=1
 
 XNINE=Xnine.o dri3.o
 XNINE_LINK=-ldl -lX11 -lXext -lxcb -lxcb-present -lxcb-dri3 -lxcb-xfixes -lX11-xcb
+GTEST_LINK=-lgtest -lgtest_main -lpthread
 XNINE_TEST_DEF=-DXNINE_FORCE_C_D3D9_INTERFACE
 
 ifneq ($(D3DADAPTER9_WITHDRI2), 0)
@@ -26,7 +27,7 @@ Xnine.o: ../Xnine.c
 dri3.o: ../dri3.c
 	$(CC) -c ../dri3.c -o dri3.o -I ../include/D3D9 -DD3DADAPTER9_WITHDRI2=$(D3DADAPTER9_WITHDRI2)
 NineTests: $(XNINE) NineTests.cpp
-	$(CXX) NineTests.cpp $(XNINE_TEST_DEF) $(XNINE) $(XNINE_LINK) -I ../include/D3D9 -I ../include -I .. -o NineTests -fpermissive
+	$(CXX) NineTests.cpp $(XNINE_TEST_DEF) $(XNINE) $(XNINE_LINK) $(GTEST_LINK) -I ../include/D3D9 -I ../include -I .. -o NineTests -fpermissive
 clean:
 	rm -f $(XNINE) $(SDLNINE)
 	rm -f $(EXEC)
