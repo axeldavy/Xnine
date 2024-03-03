@@ -53,7 +53,7 @@ typedef struct IDirect3DVertexShader9 IDirect3DVertexShader9, *PDIRECT3DVERTEXSH
 typedef struct IDirect3DVolume9 IDirect3DVolume9, *PDIRECT3DVOLUME9, *LPDIRECT3DVOLUME9;
 typedef struct IDirect3DVolumeTexture9 IDirect3DVolumeTexture9, *PDIRECT3DVOLUMETEXTURE9, *LPDIRECT3DVOLUMETEXTURE9;
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(XNINE_FORCE_C_D3D9_INTERFACE)
 
 extern "C" const GUID IID_IDirect3D9;
 extern "C" const GUID IID_IDirect3D9Ex;
