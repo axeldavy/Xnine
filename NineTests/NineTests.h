@@ -39,7 +39,7 @@
 #define UINT_PTR int
 
 #define broken(x) 0
-#define ok(c, ...) {{ASSERT_TRUE(c);}}
+#define ok(c, ...) {{EXPECT_TRUE(c);}}
 #define ok_(file, line) ok
 #define skip(...) {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);}
 #define win_skip(...) {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);}
