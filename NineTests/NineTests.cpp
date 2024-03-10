@@ -65,6 +65,9 @@ TEST(Xnine, cube_wrap){
 TEST(Xnine, z_range){
     z_range_test();
 };
+TEST(Xnine, multisample_stretch_rect){
+    test_multisample_stretch_rect();
+};
 TEST(Xnine, maxmip){
     maxmip_test();
 };
@@ -128,6 +131,12 @@ TEST(Xnine, alpha){
 TEST(Xnine, viewport){
     test_viewport();
 };
+TEST(Xnine, generate_mipmap){
+    test_generate_mipmap();
+};
+TEST(Xnine, mipmap_autogen){
+    test_mipmap_autogen();
+};
 TEST(Xnine, constant_clamp_vs){
     test_constant_clamp_vs();
 };
@@ -136,6 +145,9 @@ TEST(Xnine, compare_instructions){
 };
 TEST(Xnine, mova){
     test_mova();
+};
+TEST(Xnine, sincos){
+    sincos_test();
 };
 TEST(Xnine, loop_index){
     loop_index_test();
@@ -215,6 +227,9 @@ TEST(Xnine, depth_buffer){
 TEST(Xnine, depth_buffer2){
     depth_buffer2_test();
 };
+TEST(Xnine, depth_blit){
+    depth_blit_test();
+};
 TEST(Xnine, intz){
     intz_test();
 };
@@ -262,6 +277,9 @@ TEST(Xnine, resz){
 };
 TEST(Xnine, stencil_cull){
     stencil_cull_test();
+};
+TEST(Xnine, buffer_no_dirty_update){
+    test_buffer_no_dirty_update();
 };
 TEST(Xnine, per_stage_constant){
     test_per_stage_constant();
@@ -364,6 +382,18 @@ TEST(Xnine, alpha_to_coverage){
 };
 TEST(Xnine, sample_mask){
     test_sample_mask();
+};
+TEST(Xnine, dynamic_map_synchronization){
+    test_dynamic_map_synchronization();
+};
+TEST(Xnine, filling_convention){
+    test_filling_convention();
+};
+TEST(Xnine, managed_reset){
+    test_managed_reset();
+};
+TEST(Xnine, managed_generate_mipmap){
+    test_managed_generate_mipmap();
 };
 
 class TestEnvironment : public ::testing::Environment {
