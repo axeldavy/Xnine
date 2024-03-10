@@ -31,6 +31,7 @@
 #include <math.h>
 #include <d3d9.h>
 #include "Xnine.h"
+#include "NineTests.h"
 
 #include <unistd.h>
 #include <string.h>
