@@ -112,3 +112,18 @@ static HWND create_window(void)
     (void)Xnine_create_window(priv, 640, 480, FALSE, &ret);
     return ret;
 }
+
+#define wait_query(a) wait_query_(__FILE__, __LINE__, a)
+static inline void wait_query_(const char *file, unsigned int line, IDirect3DQuery9 *query)
+{
+    unsigned int i;
+    HRESULT hr;
+
+    for (i = 0; i < 500; ++i)
+    {
+        if ((hr = IDirect3DQuery9_GetData(query, NULL, 0, D3DGETDATA_FLUSH)) == S_OK)
+            break;
+        sleep(10);
+    }
+    ok_(file, line)(hr == S_OK, "Got unexpected hr %#x.\n", hr);
+}
