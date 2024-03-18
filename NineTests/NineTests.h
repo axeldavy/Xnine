@@ -55,7 +55,6 @@
 #define HeapAlloc(a, b, c) malloc(c)
 #define HeapFree(a, b, c) free(c)
 #define heap_free free
-#define LPDWORD (DWORD*)
 #define min(a, b) (((a) > (b)) ? (b) : (a))
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 
