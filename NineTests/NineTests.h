@@ -36,7 +36,7 @@
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
 
-#define UINT_PTR int
+#define UINT_PTR uintptr_t
 
 #define broken(x) 0
 #define ok(c, ...) do {{EXPECT_TRUE(c);}} while(0)
