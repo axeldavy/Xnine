@@ -39,11 +39,11 @@
 #define UINT_PTR int
 
 #define broken(x) 0
-#define ok(c, ...) {{EXPECT_TRUE(c);}}
+#define ok(c, ...) do {{EXPECT_TRUE(c);}} while(0)
 #define ok_(file, line) ok
-#define skip(...) {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);}
-#define win_skip(...) {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);}
-#define trace(...) {fprintf(stderr, "trace(%u): ", __LINE__);fprintf(stderr, __VA_ARGS__);}
+#define skip(...) do {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);} while(0)
+#define win_skip(...) do {fprintf(stderr, "skip(%u): ", __LINE__); fprintf(stderr, __VA_ARGS__);} while(0)
+#define trace(...) do {fprintf(stderr, "trace(%u): ", __LINE__);fprintf(stderr, __VA_ARGS__);} while(0)
 
 #define ZeroMemory(p, n) memset(p, 0, n)
 
