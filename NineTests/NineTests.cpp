@@ -206,6 +206,9 @@ TEST(Xnine, vface_register){
 TEST(Xnine, fragment_coords){
     test_fragment_coords();
 };
+TEST(Xnine, pointsize){
+    test_pointsize();
+};
 TEST(Xnine, multiple_rendertargets){
     multiple_rendertargets_test();
 };
@@ -232,6 +235,9 @@ TEST(Xnine, depth_blit){
 };
 TEST(Xnine, intz){
     intz_test();
+};
+TEST(Xnine, fetch4){
+    test_fetch4();
 };
 TEST(Xnine, shadow){
     shadow_test();
@@ -376,6 +382,9 @@ TEST(Xnine, mismatched_sample_types){
 };
 TEST(Xnine, draw_mapped_buffer){
     test_draw_mapped_buffer();
+};
+TEST(Xnine, sample_attached_rendertarget){
+    test_sample_attached_rendertarget();
 };
 TEST(Xnine, alpha_to_coverage){
     test_alpha_to_coverage();
