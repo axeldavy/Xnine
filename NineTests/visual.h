@@ -35,7 +35,8 @@
 
 #define COBJMACROS
 #include <d3d9.h>
-#include "utils.h"
+#include "Xnine.h"
+#include "NineTests.h"
 
 struct vec2
 {
@@ -59,18 +60,6 @@ struct d3d9_test_context
     IDirect3DDevice9 *device;
     IDirect3DSurface9 *backbuffer;
 };
-
-static HWND create_window(void)
-{
-    HWND hwnd;
-    RECT rect;
-
-    SetRect(&rect, 0, 0, 640, 480);
-    AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW | WS_VISIBLE, FALSE);
-    hwnd = CreateWindowA("static", "d3d9_test", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            0, 0, rect.right - rect.left, rect.bottom - rect.top, 0, 0, 0, 0);
-    return hwnd;
-}
 
 static BOOL compare_uint(unsigned int x, unsigned int y, unsigned int max_diff)
 {
