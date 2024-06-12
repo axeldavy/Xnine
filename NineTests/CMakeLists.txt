@@ -6,6 +6,9 @@ target_link_libraries(NineTests PRIVATE ${COMMON_LIBS} ${GTEST} ${PTHREAD} ${GL}
 target_include_directories(NineTests PRIVATE ${PROJECT_SOURCE_DIR})
 target_compile_definitions(NineTests PRIVATE XNINE_FORCE_C_D3D9_INTERFACE)
 
+# Suppress the return-type warning
+add_compile_options(-Wno-return-type)
+
 # We compile C code as C++ where some pointer conversions are not allowed
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_compile_options(NineTests PRIVATE -fpermissive)
